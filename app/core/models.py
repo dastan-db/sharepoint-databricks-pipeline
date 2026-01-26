@@ -36,9 +36,22 @@ class SharePointPipelineConfig(BaseModel):
     connection_id: str
     ingestion_type: Literal["all_drives", "specific_drives"]
     drive_names: Optional[List[str]] = None
-    lakebase_table: str  # Target Lakebase documents table
+    delta_table: str  # Target Unity Catalog Delta table
     file_pattern: str = "*.xlsx"  # Filter for Excel files only
     pipeline_id: Optional[str] = None  # Databricks pipeline ID (populated after creation)
+
+
+class LakeflowJobConfig(BaseModel):
+    id: str
+    name: str
+    connection_id: str  # Reference to SharePoint connection
+    connection_name: str  # Unity Catalog connection name (e.g., "sharepoint-fe")
+    source_schema: str  # SharePoint site ID (UUID)
+    destination_catalog: str  # Unity Catalog (e.g., "main")
+    destination_schema: str  # Schema where tables will land
+    pipeline_id: Optional[str] = None  # Databricks pipeline ID after creation
+    job_id: Optional[str] = None  # Databricks job ID (scheduled run)
+    created_at: Optional[str] = None
 
 
 class ExcelStreamConfig(BaseModel):

@@ -11,9 +11,8 @@ router = APIRouter()
 
 def _get_stream_configs_table():
     """Get the fully qualified excel_stream_configs table name."""
-    catalog = os.getenv("LAKEBASE_CATALOG", "main")
-    schema = os.getenv("LAKEBASE_SCHEMA", "vibe_coding")
-    return f"{catalog}.{schema}.excel_stream_configs"
+    schema = os.getenv("LAKEBASE_SCHEMA", "public")
+    return f"{schema}.excel_stream_configs"
 
 
 # ============================================
@@ -23,11 +22,6 @@ def _get_stream_configs_table():
 @router.get("/configs")
 def list_stream_configs() -> List[ExcelStreamConfig]:
     """List all Excel streaming configurations."""
-    # region agent log
-    import json, time
-    with open('/Users/dastan.aitzhanov/projects/fe-vibe-app/.cursor/debug.log', 'a') as f:
-        f.write(json.dumps({'location':'routes_excel_streaming.py:22','message':'list_stream_configs called','data':{},'timestamp':int(time.time()*1000),'sessionId':'debug-session','hypothesisId':'H3,H5'}) + '\n')
-    # endregion
     try:
         configs_table = _get_stream_configs_table()
         query = f"""

@@ -1,0 +1,65 @@
+bundle:
+  name: sharepoint-lakeflow-bundle
+  
+variables:
+  catalog:
+    default: main
+    description: Unity Catalog name
+  
+  schema:
+    default: vibe_coding
+    description: Schema for metadata storage
+  
+  warehouse_id:
+    description: SQL Warehouse ID for queries
+    default: ""
+  
+  notification_email:
+    description: Email address for job failure notifications
+    default: ""
+    
+resources:
+  jobs:
+    lakeflow_orchestration:
+      name: "Lakeflow Orchestration - ${bundle.environment}"
+      tasks:
+        - task_key: refresh_connections
+          notebook_task:
+            notebook_path: ./src/notebooks/connection_management.py
+            source: WORKSPACE
+            base_parameters:
+              catalog: ${var.catalog}
+              schema: ${var.schema}
+              warehouse_id: ${var.warehouse_id}
+        
+        - task_key: manage_lakeflow_jobs
+          notebook_task:
+            notebook_path: ./src/notebooks/lakeflow_management.py
+            source: WORKSPACE
+            base_parameters:
+              catalog: ${var.catalog}
+              schema: ${var.schema}
+              warehouse_id: ${var.warehouse_id}
+          depends_on:
+            - task_key: refresh_connections
+      
+      schedule:
+        quartz_cron_expression: "0 0 * * * ?"
+        timezone_id: "UTC"
+      
+      email_notifications:
+        on_failure:
+          - ${var.notification_email}
+      
+targets:
+  dev:
+    mode: development
+    
+  prod:
+    mode: production
+    resources:
+      jobs:
+        lakeflow_orchestration:
+          permissions:
+            - level: CAN_VIEW
+              group_name: users

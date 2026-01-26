@@ -4,24 +4,10 @@ from typing import List
 import json
 import os
 from app.core.models import SharePointConnection, SharePointPipelineConfig
-from app.services.lakebase import Lakebase
+from app.services.unity_catalog import UnityCatalog
 from app.services.sharepoint_connector import SharePointConnector
 
 router = APIRouter()
-
-
-def _get_connections_table():
-    """Get the fully qualified sharepoint_connections table name."""
-    catalog = os.getenv("LAKEBASE_CATALOG", "main")
-    schema = os.getenv("LAKEBASE_SCHEMA", "vibe_coding")
-    return f"{catalog}.{schema}.sharepoint_connections"
-
-
-def _get_pipelines_table():
-    """Get the fully qualified sharepoint_pipelines table name."""
-    catalog = os.getenv("LAKEBASE_CATALOG", "main")
-    schema = os.getenv("LAKEBASE_SCHEMA", "vibe_coding")
-    return f"{catalog}.{schema}.sharepoint_pipelines"
 
 
 # ============================================
@@ -30,37 +16,53 @@ def _get_pipelines_table():
 
 @router.get("/connections")
 def list_connections() -> List[SharePointConnection]:
-    """List all SharePoint connections."""
-    # region agent log
-    import json, time
-    with open('/Users/dastan.aitzhanov/projects/fe-vibe-app/.cursor/debug.log', 'a') as f:
-        f.write(json.dumps({'location':'routes_sharepoint.py:18','message':'list_connections called','data':{},'timestamp':int(time.time()*1000),'sessionId':'debug-session','hypothesisId':'H3,H5'}) + '\n')
-    # endregion
+    """List all SharePoint Lakeflow connector configurations."""
     try:
-        connections_table = _get_connections_table()
-        query = f"""
-            SELECT id, name, client_id, client_secret, tenant_id, refresh_token, site_id, connection_name
-            FROM {connections_table}
-            ORDER BY name
-        """
-        rows = Lakebase.query(query)
+        # region agent log
+        import time
+        from databricks.sdk import WorkspaceClient
+        import os
+        with open('/Users/dastan.aitzhanov/projects/fe-vibe-app/.cursor/debug.log', 'a') as f:
+            f.write(json.dumps({"sessionId":"debug-session","runId":"lakeflow-search","hypothesisId":"LAKEFLOW","location":"routes_sharepoint.py:21","message":"Searching for Lakeflow connectors","data":{},"timestamp":int(time.time()*1000)})+'\n')
+        # endregion
         
+        # Get all connections from Databricks
+        # Use SHOW CONNECTIONS; SQL query via Unity Catalog
+        query = "SHOW CONNECTIONS"
+        results = UnityCatalog.query(query)
+        
+        # region agent log
+        with open('/Users/dastan.aitzhanov/projects/fe-vibe-app/.cursor/debug.log', 'a') as f:
+            f.write(json.dumps({"sessionId":"debug-session","runId":"sql-connections","hypothesisId":"SQL","location":"routes_sharepoint.py:30","message":"SHOW CONNECTIONS results","data":{"total":len(results),"sample":results[:5]},"timestamp":int(time.time()*1000)})+'\n')
+        # endregion
+        
+        # Filter for SharePoint connections only
+        sharepoint_connections = [
+            conn for conn in results 
+            if conn.get('type', '').upper() == 'SHAREPOINT'
+        ]
+        
+        # Convert to SharePointConnection model
         connections = []
-        for row in rows:
+        for conn in sharepoint_connections:
+            # Extract connection details
+            conn_name = conn.get('name', '')
+            conn_comment = conn.get('comment', '')
             connections.append(SharePointConnection(
-                id=row[0],
-                name=row[1],
-                client_id=row[2],
-                client_secret=row[3],
-                tenant_id=row[4],
-                refresh_token=row[5],
-                site_id=row[6],
-                connection_name=row[7],
+                id=conn_name,
+                name=conn_name,
+                client_id="",  # Not exposed in SHOW CONNECTIONS
+                client_secret="****",  # Not exposed
+                tenant_id="",  # Would need to query connection details
+                refresh_token="****",  # Not exposed
+                site_id=conn_comment or "",  # Use comment as description
+                connection_name=conn_name,
             ))
+        
         return connections
     except Exception as e:
-        # If table doesn't exist, return empty list
-        if "does not exist" in str(e).lower() or "not found" in str(e).lower():
+        # Handle query errors
+        if "TABLE_OR_VIEW_NOT_FOUND" in str(e):
             return []
         raise HTTPException(status_code=500, detail=f"Failed to list connections: {str(e)}")
 
@@ -189,16 +191,11 @@ def test_connection(connection_id: str) -> dict:
 @router.get("/pipelines")
 def list_pipelines() -> List[SharePointPipelineConfig]:
     """List all SharePoint pipeline configs."""
-    # region agent log
-    import json, time
-    with open('/Users/dastan.aitzhanov/projects/fe-vibe-app/.cursor/debug.log', 'a') as f:
-        f.write(json.dumps({'location':'routes_sharepoint.py:184','message':'list_pipelines called','data':{},'timestamp':int(time.time()*1000),'sessionId':'debug-session','hypothesisId':'H3,H5'}) + '\n')
-    # endregion
     try:
         pipelines_table = _get_pipelines_table()
         query = f"""
             SELECT id, name, connection_id, ingestion_type, drive_names, 
-                   lakebase_table, file_pattern, pipeline_id
+                   delta_table, file_pattern, pipeline_id
             FROM {pipelines_table}
             ORDER BY name
         """
@@ -213,7 +210,7 @@ def list_pipelines() -> List[SharePointPipelineConfig]:
                 connection_id=row[2],
                 ingestion_type=row[3],
                 drive_names=drive_names,
-                lakebase_table=row[5],
+                delta_table=row[5],
                 file_pattern=row[6] if row[6] else "*.xlsx",
                 pipeline_id=row[7],
             ))
@@ -239,7 +236,7 @@ def create_pipeline(config: SharePointPipelineConfig) -> dict:
                 connection_id VARCHAR NOT NULL,
                 ingestion_type VARCHAR NOT NULL,
                 drive_names VARCHAR,
-                lakebase_table VARCHAR NOT NULL,
+                delta_table VARCHAR NOT NULL,
                 file_pattern VARCHAR DEFAULT '*.xlsx',
                 pipeline_id VARCHAR
             )
@@ -261,10 +258,10 @@ def create_pipeline(config: SharePointPipelineConfig) -> dict:
         insert_query = f"""
             INSERT INTO {pipelines_table} 
             (id, name, connection_id, ingestion_type, drive_names, 
-             lakebase_table, file_pattern, pipeline_id)
+             delta_table, file_pattern, pipeline_id)
             VALUES ('{config.id}', '{config.name}', '{config.connection_id}', 
                     '{config.ingestion_type}', {drive_names_str},
-                    '{config.lakebase_table}', '{config.file_pattern}', '{config.pipeline_id}')
+                    '{config.delta_table}', '{config.file_pattern}', '{config.pipeline_id}')
             RETURNING *
         """
         Lakebase.query(insert_query)
@@ -289,7 +286,7 @@ def get_pipeline(pipeline_id: str) -> SharePointPipelineConfig:
         pipelines_table = _get_pipelines_table()
         query = f"""
             SELECT id, name, connection_id, ingestion_type, drive_names, 
-                   lakebase_table, file_pattern, pipeline_id
+                   delta_table, file_pattern, pipeline_id
             FROM {pipelines_table}
             WHERE id = '{pipeline_id}'
         """
@@ -306,7 +303,7 @@ def get_pipeline(pipeline_id: str) -> SharePointPipelineConfig:
             connection_id=row[2],
             ingestion_type=row[3],
             drive_names=drive_names,
-            lakebase_table=row[5],
+            delta_table=row[5],
             file_pattern=row[6] if row[6] else "*.xlsx",
             pipeline_id=row[7],
         )

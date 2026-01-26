@@ -1,10 +1,6 @@
 # SharePoint to Databricks Data Pipeline
 
-A modern web application for building data pipelines from SharePoint to Databricks Delta tables using a three-stage architecture:
-
-1. **SharePoint Connections** - OAuth U2M authentication credentials
-2. **Lakeflow Pipelines** - Ingest Excel files from SharePoint to Lakebase
-3. **Excel Streaming** - Continuously stream from Lakebase to Delta tables
+A modern web application for viewing and managing SharePoint data ingested into Databricks Unity Catalog via Lakeflow connectors.
 
 Built with FastAPI backend and a beautiful single-page HTML/CSS/JavaScript frontend.
 
@@ -13,40 +9,49 @@ Built with FastAPI backend and a beautiful single-page HTML/CSS/JavaScript front
 -   **FastAPI**: High-performance web framework for building APIs
 -   **Uvicorn**: ASGI server for running the FastAPI application
 -   **Python-dotenv**: Environment variable management
--   **Databricks SDK**: Integration with Databricks services and Lakebase
--   **PostgreSQL Protocol**: Database connection via psycopg2 to Lakebase
+-   **Databricks SDK**: Integration with Databricks Unity Catalog and SQL Warehouses
+-   **Unity Catalog**: Access SharePoint data ingested by Lakeflow connectors
 -   **Pandas**: Excel file parsing and data manipulation
 -   **HTML5/CSS3/JavaScript**: Modern, responsive single-page application
 
 ## Architecture Overview
 
 ```
-┌──────────────┐     ┌─────────────────┐     ┌──────────────┐     ┌────────────────┐
-│  SharePoint  │────>│ Lakeflow        │────>│  Lakebase    │────>│ Excel Streaming│
-│  Excel Files │     │ Pipeline        │     │  Documents   │     │ to Delta Tables│
-└──────────────┘     └─────────────────┘     └──────────────┘     └────────────────┘
-       ↑                      ↑                                            │
-       │                      │                                            ↓
-       │             ┌────────────────┐                          ┌──────────────────┐
-       └─────────────│   SharePoint   │                          │  Delta Tables    │
-                     │  Connections   │                          │  (Analytics)     │
-                     │  (OAuth U2M)   │                          └──────────────────┘
-                     └────────────────┘
+┌──────────────┐     ┌─────────────────┐     ┌────────────────────┐
+│  SharePoint  │────>│ Lakeflow        │────>│  Unity Catalog     │
+│  Data Sources│     │ Connectors      │     │  Tables            │
+└──────────────┘     └─────────────────┘     └────────────────────┘
+                                                       │
+                                                       ↓
+                              ┌────────────────────────────────────────┐
+                              │     Web Application (FastAPI)          │
+                              │  ┌──────────────────────────────────┐  │
+                              │  │  Unity Catalog Service           │  │
+                              │  │  (SQL Warehouse Queries)         │  │
+                              │  └──────────────────────────────────┘  │
+                              └────────────────────────────────────────┘
+                                               ↓
+                              ┌────────────────────────────────────────┐
+                              │   Web UI (HTML/CSS/JavaScript)         │
+                              │   - View SharePoint connections         │
+                              │   - Browse ingested data               │
+                              └────────────────────────────────────────┘
 ```
 
 ### Data Flow
 
-1. **SharePoint Connections**: Store OAuth U2M credentials for SharePoint authentication
-2. **Lakeflow Pipelines**: Use connections to ingest Excel files from SharePoint drives into Lakebase documents table
-3. **Excel Streaming**: Continuously monitor Lakebase and stream parsed Excel data to Delta tables
+1. **Lakeflow Connectors**: Ingest SharePoint data into Unity Catalog tables (managed by Databricks)
+2. **Unity Catalog**: Stores SharePoint data in managed/streaming tables across various catalogs and schemas
+3. **Web Application**: Queries Unity Catalog via SQL Warehouse to display SharePoint connections and data
+4. **Web UI**: Interactive interface to view and manage SharePoint data sources
 
 ## Features
 
 ### Section 1: SharePoint Connections
--   **OAuth U2M Management**: Create and test SharePoint connections with Azure Entra ID credentials
--   **Credential Storage**: Securely store client ID, secret, tenant ID, refresh tokens, and site IDs
--   **Connection Testing**: Validate credentials before creating pipelines
--   **Reusable**: One connection can be used by multiple Lakeflow pipelines
+-   **Connection Discovery**: Automatically discover all SharePoint tables in Unity Catalog (135 found)
+-   **Connection Viewing**: Browse SharePoint data sources organized by catalog and schema
+-   **Table Metadata**: View table names, types (MANAGED/STREAMING_TABLE), and full Unity Catalog paths
+-   **User-friendly Display**: Clean interface showing connection details and available actions
 
 ### Section 2: Lakeflow Pipelines (Excel Ingestion)
 -   **Managed Ingestion**: Databricks Lakeflow Connect pipelines for automated Excel ingestion

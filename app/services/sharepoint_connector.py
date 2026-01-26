@@ -80,7 +80,7 @@ class _SharePointConnectorService:
 
     def create_pipeline(self, config: SharePointPipelineConfig, connection: SharePointConnection) -> str:
         """
-        Create a Databricks ingestion pipeline for SharePoint Excel files to Lakebase.
+        Create a Databricks ingestion pipeline for SharePoint Excel files to Unity Catalog Delta tables.
         
         Args:
             config: SharePointPipelineConfig object
@@ -97,19 +97,19 @@ class _SharePointConnectorService:
         
         # Build ingestion definition based on type
         if config.ingestion_type == "all_drives":
-            # Schema-based ingestion (all drives) - targets Lakebase table
+            # Schema-based ingestion (all drives) - targets Unity Catalog Delta table
             ingestion_objects = [{
                 "schema": {
                     "source_schema": connection.site_id,
                     "destination_catalog": lakebase_catalog,
                     "destination_schema": lakebase_schema,
                     "table_configuration": {
-                        "scd_type": "SCD_TYPE_1"  # Lakebase ingestion uses SCD_TYPE_1
+                        "scd_type": "SCD_TYPE_1"  # Unity Catalog ingestion uses SCD_TYPE_1
                     }
                 }
             }]
         else:
-            # Table-based ingestion (specific drives) - targets Lakebase table
+            # Table-based ingestion (specific drives) - targets Unity Catalog Delta table
             ingestion_objects = []
             for drive_name in config.drive_names or []:
                 ingestion_objects.append({
@@ -118,9 +118,9 @@ class _SharePointConnectorService:
                         "source_table": drive_name,
                         "destination_catalog": lakebase_catalog,
                         "destination_schema": lakebase_schema,
-                        "destination_table": config.lakebase_table,
+                        "destination_table": config.delta_table,
                         "table_configuration": {
-                            "scd_type": "SCD_TYPE_1"  # Lakebase ingestion uses SCD_TYPE_1
+                            "scd_type": "SCD_TYPE_1"  # Unity Catalog ingestion uses SCD_TYPE_1
                         }
                     }
                 })

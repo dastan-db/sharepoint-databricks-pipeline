@@ -46,4 +46,10 @@ build/
 /backend/.pytest_cache/
 /backend/.mypy_cache/
 /backend/.dmypy.json
-/backend/.pyre/ 
+/backend/.pyre/
+
+# Cursor IDE
+.cursor/
+
+# Databricks bundle artifacts
+.databricks/
