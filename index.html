@@ -323,6 +323,7 @@
                     id="connectionSearchInput" 
                     placeholder="🔍 Search connections by name, ID, site, or catalog..."
                     style="width: 100%;"
+                    autocomplete="off"
                 />
             </div>
             
@@ -728,6 +729,9 @@
             const searchInput = document.getElementById('connectionSearchInput');
             console.log('Setting up search filter, input element:', searchInput);
             if (searchInput) {
+                // Explicitly clear any cached value from browser
+                searchInput.value = '';
+                
                 // Remove existing listener if any
                 searchInput.removeEventListener('input', handleSearchInput);
                 // Add new listener
@@ -1035,7 +1039,7 @@
         }
 
         async function loadDocumentsTable(connectionId) {
-            try:
+            try {
                 document.getElementById('documentsViewerContainer').style.display = 'block';
                 document.getElementById('documentsTableBody').innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 20px;">Loading documents...</td></tr>';
                 

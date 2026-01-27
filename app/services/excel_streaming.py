@@ -1,93 +1,63 @@
 # app/services/excel_streaming.py
-import os
+"""
+Excel Streaming Service - Refactored to use Databricks Jobs orchestration.
+Now delegates to JobOrchestrator instead of managing streams with custom loops.
+"""
 from typing import Dict, Any, List
-from databricks.sdk import WorkspaceClient
 from app.core.models import ExcelStreamConfig
+from app.services.job_orchestrator import JobOrchestrator
 
 
 class _ExcelStreamingService:
-    """Singleton service for managing continuous Excel streaming from Lakebase to Delta tables."""
+    """
+    Singleton service for managing Excel streaming orchestration.
+    Delegates to JobOrchestrator for native Databricks Jobs management.
+    """
 
     _instance = None
-    _workspace_client = None
-    _active_streams: Dict[str, str] = {}  # config_id -> job_id mapping
 
     def __new__(cls):
         if cls._instance is None:
             cls._instance = super(_ExcelStreamingService, cls).__new__(cls)
         return cls._instance
 
-    def _get_workspace_client(self) -> WorkspaceClient:
-        """Get or create Databricks Workspace Client."""
-        if self._workspace_client is None:
-            self._workspace_client = WorkspaceClient(
-                client_id=os.getenv("DATABRICKS_CLIENT_ID"),
-                client_secret=os.getenv("DATABRICKS_CLIENT_SECRET")
-            )
-        return self._workspace_client
-
     def start_stream(self, config: ExcelStreamConfig) -> str:
         """
-        Start continuous streaming job for Excel files from Lakebase to Delta.
+        Start streaming job for Excel files using Databricks Jobs.
         
         Args:
             config: ExcelStreamConfig object with streaming configuration
             
         Returns:
-            Job ID or stream identifier
-        """
-        w = self._get_workspace_client()
-        
-        # Get Lakebase connection details
-        lakebase_catalog = os.getenv("LAKEBASE_CATALOG", "main")
-        lakebase_schema = os.getenv("LAKEBASE_SCHEMA", "vibe_coding")
-        
-        # Build streaming notebook code
-        notebook_code = f"""
-# Streaming Excel from Lakebase to Delta
-from pyspark.sql import SparkSession
-from pyspark.sql.functions import col
-
-spark = SparkSession.builder.getOrCreate()
-
-# Read from Lakebase documents table (streaming)
-source_table = "{lakebase_catalog}.{lakebase_schema}.{config.lakebase_table}"
-checkpoint_location = "{config.checkpoint_location}"
-
-# Create streaming query
-df = spark.readStream \\
-    .format("delta") \\
-    .table(source_table) \\
-    .filter(col("file_name").like("{config.file_name_pattern}"))
-
-# Parse Excel and write to destination Delta table
-# Note: In production, add Excel parsing logic here
-destination_table = "{config.destination_catalog}.{config.destination_schema}.{config.destination_table}"
-
-query = df.writeStream \\
-    .format("delta") \\
-    .outputMode("append") \\
-    .option("checkpointLocation", checkpoint_location) \\
-    .trigger(processingTime="{config.trigger_interval}") \\
-    .toTable(destination_table)
-
-query.awaitTermination()
-"""
-        
-        # Create a notebook job for streaming
-        # Note: This is a simplified implementation. In production, you would:
-        # 1. Create or upload a notebook with the streaming code
-        # 2. Create a job that runs the notebook continuously
-        # 3. Start the job and track its status
-        
-        try:
-            # For now, store the config ID as "active" but don't actually start a job
-            # This would need actual Databricks Jobs API integration
-            self._active_streams[config.id] = f"stream_job_{config.id}"
+            Job ID
             
-            return self._active_streams[config.id]
-        except Exception as e:
-            raise Exception(f"Failed to start streaming job: {str(e)}")
+        Note: This is now a wrapper around JobOrchestrator.
+        In a fully async context, this should be async, but maintaining
+        sync interface for backward compatibility with current routes.
+        """
+        import asyncio
+        
+        # Run the async job orchestrator in a new event loop if needed
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                # If we're already in an async context, create a task
+                # This is a simplification - in production you'd handle this better
+                raise RuntimeError(
+                    "start_stream called from async context. "
+                    "Use JobOrchestrator.start_streaming_job directly for async calls."
+                )
+        except RuntimeError:
+            # No event loop, create one
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+        
+        result = loop.run_until_complete(JobOrchestrator.start_streaming_job(config))
+        
+        if not result.get("success"):
+            raise Exception(result.get("message", "Failed to start streaming job"))
+        
+        return result.get("job_id", "")
 
     def stop_stream(self, config_id: str) -> Dict[str, Any]:
         """
@@ -99,30 +69,20 @@ query.awaitTermination()
         Returns:
             Dict with stop result
         """
+        import asyncio
+        
         try:
-            if config_id in self._active_streams:
-                job_id = self._active_streams[config_id]
-                
-                # In production, stop the actual Databricks job here
-                # w = self._get_workspace_client()
-                # w.jobs.cancel_run(run_id=job_id)
-                
-                del self._active_streams[config_id]
-                
-                return {
-                    "success": True,
-                    "message": f"Streaming job {job_id} stopped successfully"
-                }
-            else:
-                return {
-                    "success": False,
-                    "message": f"No active stream found for config {config_id}"
-                }
-        except Exception as e:
-            return {
-                "success": False,
-                "message": f"Failed to stop stream: {str(e)}"
-            }
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                raise RuntimeError(
+                    "stop_stream called from async context. "
+                    "Use JobOrchestrator.stop_streaming_job directly for async calls."
+                )
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+        
+        return loop.run_until_complete(JobOrchestrator.stop_streaming_job(config_id))
 
     def get_stream_status(self, config_id: str) -> Dict[str, Any]:
         """
@@ -134,33 +94,20 @@ query.awaitTermination()
         Returns:
             Dict with stream status and metrics
         """
+        import asyncio
+        
         try:
-            if config_id in self._active_streams:
-                job_id = self._active_streams[config_id]
-                
-                # In production, query actual job status from Databricks
-                # w = self._get_workspace_client()
-                # run = w.jobs.get_run(run_id=job_id)
-                
-                return {
-                    "success": True,
-                    "is_active": True,
-                    "job_id": job_id,
-                    "state": "RUNNING",
-                    "message": "Stream is actively processing data"
-                }
-            else:
-                return {
-                    "success": True,
-                    "is_active": False,
-                    "state": "STOPPED",
-                    "message": "Stream is not running"
-                }
-        except Exception as e:
-            return {
-                "success": False,
-                "message": f"Failed to get stream status: {str(e)}"
-            }
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                raise RuntimeError(
+                    "get_stream_status called from async context. "
+                    "Use JobOrchestrator.get_streaming_job_status directly for async calls."
+                )
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+        
+        return loop.run_until_complete(JobOrchestrator.get_streaming_job_status(config_id))
 
     def list_active_streams(self) -> List[str]:
         """
@@ -169,7 +116,21 @@ query.awaitTermination()
         Returns:
             List of active configuration IDs
         """
-        return list(self._active_streams.keys())
+        import asyncio
+        
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                raise RuntimeError(
+                    "list_active_streams called from async context. "
+                    "Use JobOrchestrator.list_active_jobs directly for async calls."
+                )
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+        
+        active_jobs = loop.run_until_complete(JobOrchestrator.list_active_jobs())
+        return list(active_jobs.keys())
 
 
 # Create singleton instance

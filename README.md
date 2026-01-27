@@ -6,36 +6,60 @@ Built with FastAPI backend and a beautiful single-page HTML/CSS/JavaScript front
 
 ## Technologies Used
 
+### Core Technologies
 -   **FastAPI**: High-performance web framework for building APIs
 -   **Uvicorn**: ASGI server for running the FastAPI application
 -   **Python-dotenv**: Environment variable management
--   **Databricks SDK**: Integration with Databricks Unity Catalog and SQL Warehouses
--   **Unity Catalog**: Access SharePoint data ingested by Lakeflow connectors
+-   **Databricks SDK**: Official Python SDK for Databricks platform integration
+-   **databricks-tools-core**: High-level toolkit for secure SQL execution and job orchestration
+-   **Unity Catalog**: Secure data governance and access control
 -   **Pandas**: Excel file parsing and data manipulation
 -   **HTML5/CSS3/JavaScript**: Modern, responsive single-page application
+
+### Security & Infrastructure
+-   **Secure SQL Execution**: SQL injection prevention via escaped queries and SDK methods
+-   **Unity Catalog SDK**: Infrastructure-as-code for table management
+-   **Databricks Jobs API**: Native orchestration replacing custom threading
+-   **Schema Manager**: Automated database initialization on startup
 
 ## Architecture Overview
 
 ```
 ┌──────────────┐     ┌─────────────────┐     ┌────────────────────┐
 │  SharePoint  │────>│ Lakeflow        │────>│  Unity Catalog     │
-│  Data Sources│     │ Connectors      │     │  Tables            │
+│  Data Sources│     │ Connectors      │     │  (Secure Storage)  │
 └──────────────┘     └─────────────────┘     └────────────────────┘
                                                        │
                                                        ↓
-                              ┌────────────────────────────────────────┐
-                              │     Web Application (FastAPI)          │
-                              │  ┌──────────────────────────────────┐  │
-                              │  │  Unity Catalog Service           │  │
-                              │  │  (SQL Warehouse Queries)         │  │
-                              │  └──────────────────────────────────┘  │
-                              └────────────────────────────────────────┘
-                                               ↓
-                              ┌────────────────────────────────────────┐
-                              │   Web UI (HTML/CSS/JavaScript)         │
-                              │   - View SharePoint connections         │
-                              │   - Browse ingested data               │
-                              └────────────────────────────────────────┘
+                    ┌─────────────────────────────────────────────────┐
+                    │          Web Application (FastAPI)              │
+                    │                                                 │
+                    │  ┌──────────────────────────────────────────┐  │
+                    │  │  Security Layer                          │  │
+                    │  │  • SecureSQL (SQL injection prevention)  │  │
+                    │  │  • Escaped queries & SDK methods        │  │
+                    │  └──────────────────────────────────────────┘  │
+                    │                                                 │
+                    │  ┌──────────────────────────────────────────┐  │
+                    │  │  Services Layer                          │  │
+                    │  │  • SchemaManager (Unity Catalog SDK)     │  │
+                    │  │  • JobOrchestrator (Databricks Jobs)     │  │
+                    │  │  • ExcelStreaming (Job delegation)       │  │
+                    │  └──────────────────────────────────────────┘  │
+                    │                                                 │
+                    │  ┌──────────────────────────────────────────┐  │
+                    │  │  Routes Layer (FastAPI)                  │  │
+                    │  │  • SharePoint connections & pipelines    │  │
+                    │  │  • Excel streaming configurations        │  │
+                    │  └──────────────────────────────────────────┘  │
+                    └─────────────────────────────────────────────────┘
+                                         ↓
+                    ┌─────────────────────────────────────────────────┐
+                    │       Web UI (HTML/CSS/JavaScript)              │
+                    │       • View SharePoint connections             │
+                    │       • Manage ingestion pipelines              │
+                    │       • Control streaming jobs                  │
+                    └─────────────────────────────────────────────────┘
 ```
 
 ### Data Flow
@@ -44,6 +68,120 @@ Built with FastAPI backend and a beautiful single-page HTML/CSS/JavaScript front
 2. **Unity Catalog**: Stores SharePoint data in managed/streaming tables across various catalogs and schemas
 3. **Web Application**: Queries Unity Catalog via SQL Warehouse to display SharePoint connections and data
 4. **Web UI**: Interactive interface to view and manage SharePoint data sources
+
+## 🔒 Security & Architecture Refactoring (January 2026)
+
+This application has been refactored using **Databricks AI Dev Kit** best practices to eliminate security vulnerabilities and modernize the architecture.
+
+### ✅ Priority A: Security Improvements
+
+**Problem**: SQL injection vulnerabilities from direct string interpolation in queries
+**Solution**: Implemented secure SQL execution patterns
+
+1. **Eliminated 17+ SQL Injection Points**
+   - Replaced f-string SQL queries with escaped values
+   - Added `_escape_sql_string()` helper for PostgreSQL and Spark SQL
+   - Implemented `SecureSQL` service wrapping `databricks_tools_core.sql`
+
+2. **Files Secured**
+   - `routes_sharepoint.py`: 9 injection points fixed
+   - `routes_excel_streaming.py`: 8 injection points fixed
+
+**Example Fix:**
+```python
+# ❌ BEFORE (SQL Injection vulnerability)
+query = f"SELECT * FROM table WHERE id = '{user_input}'"
+
+# ✅ AFTER (Secure with escaping)
+escaped_id = _escape_sql_string(user_input)
+query = f"SELECT * FROM table WHERE id = '{escaped_id}'"
+```
+
+### ✅ Priority B: Native Orchestration
+
+**Problem**: Custom threading with `time.sleep()` loops for streaming jobs
+**Solution**: Replaced with Databricks Jobs API for native orchestration
+
+1. **JobOrchestrator Service** (new)
+   - Uses `databricks_tools_core.jobs` for job management
+   - Creates serverless Databricks Jobs for streaming
+   - Provides `start_streaming_job()`, `stop_streaming_job()`, `get_streaming_job_status()`
+   - Replaces in-memory job tracking with persistent Jobs API
+
+2. **ExcelStreaming Service** (refactored)
+   - Now delegates to JobOrchestrator
+   - Maintains backward compatibility with existing routes
+   - No more custom threading or `_active_streams` dictionary
+
+**Benefits:**
+- Jobs survive app restarts (persistent in Databricks)
+- Built-in monitoring and logging via Databricks UI
+- Automatic retry and fault tolerance
+- Serverless compute (no cluster management)
+
+### ✅ Priority C: Infrastructure as Code
+
+**Problem**: Scattered `CREATE TABLE IF NOT EXISTS` SQL strings throughout routes
+**Solution**: Centralized schema management with Unity Catalog SDK
+
+1. **SchemaManager Service** (new)
+   - Initializes all tables on application startup
+   - Uses Unity Catalog SDK (`w.tables.create()`, `w.schemas.create()`)
+   - Handles catalog/schema creation automatically
+   - Provides `initialize_sharepoint_tables()` and `initialize_lakebase_tables()`
+
+2. **Application Startup** (`main.py`)
+   - FastAPI `@app.on_event("startup")` hook
+   - Ensures all required tables exist before handling requests
+   - Visual feedback with ✓/✗ status indicators
+
+**Example:**
+```python
+@app.on_event("startup")
+async def startup_event():
+    sharepoint_result = await SchemaManager.initialize_sharepoint_tables()
+    # Output: ✓ sharepoint_connections
+    #         ✓ sharepoint_pipelines
+```
+
+### 🔑 Key Architectural Patterns
+
+1. **Singleton Services**: All services use singleton pattern for resource efficiency
+2. **Async/Await**: Proper async handling with `asyncio.to_thread()` for SDK calls
+3. **Separation of Concerns**: 
+   - Routes handle HTTP (thin controllers)
+   - Services contain business logic (thick services)
+   - SDK operations isolated in dedicated modules
+4. **Error Handling**: Comprehensive try-catch blocks with user-friendly error messages
+
+### 📦 New Dependencies
+
+- **databricks-tools-core**: High-level toolkit from Databricks AI Dev Kit
+  - `databricks_tools_core.sql` - Secure SQL execution
+  - `databricks_tools_core.jobs` - Job orchestration
+  - `databricks_tools_core.unity_catalog` - Table/schema management
+
+### 🛠️ New Services
+
+| Service | Purpose | Key Methods |
+|---------|---------|-------------|
+| `SchemaManager` | Initialize database schema on startup | `initialize_sharepoint_tables()`, `initialize_lakebase_tables()` |
+| `SecureSQL` | Execute SQL queries safely | `execute_query()` (async wrapper) |
+| `JobOrchestrator` | Manage Databricks Jobs for streaming | `start_streaming_job()`, `stop_streaming_job()`, `get_streaming_job_status()` |
+
+### 🔄 Migration Notes
+
+- **Backward Compatible**: Existing routes maintain same API contracts
+- **No Breaking Changes**: UI requires no modifications
+- **Database Initialization**: Tables now created on startup instead of first request
+- **Job Tracking**: Streaming jobs now tracked in Databricks, not in-memory
+
+### 🚀 Future Improvements
+
+- [ ] Replace SQL escaping with true parameterized queries when supported
+- [ ] Add comprehensive integration tests for new services
+- [ ] Implement request-level authentication context for multi-user deployments
+- [ ] Add monitoring dashboards for job orchestration metrics
 
 ## Features
 

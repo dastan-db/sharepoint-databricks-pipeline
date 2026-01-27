@@ -6,3 +6,5 @@ psycopg2-binary
 pydantic
 pandas
 openpyxl
+# Databricks tools for secure SQL execution and job orchestration
+-e ../ai-dev-kit/databricks-tools-core
