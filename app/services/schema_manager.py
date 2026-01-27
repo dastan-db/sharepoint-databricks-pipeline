@@ -9,6 +9,8 @@ from databricks.sdk import WorkspaceClient
 from databricks.sdk.service.catalog import ColumnInfo, TableType, DataSourceFormat, ColumnTypeName
 from typing import List, Dict
 import asyncio
+import json
+import time
 
 
 class _SchemaManagerService:
@@ -119,8 +121,8 @@ class _SchemaManagerService:
                     columns=columns,
                     table_type=TableType.MANAGED,
                     data_source_format=DataSourceFormat.DELTA,
-                    storage_location="",  # Empty for MANAGED tables
                     properties={"comment": table_comment},
+                    # Don't specify storage_location or comment at top level for MANAGED tables
                 )
                 return True
             except Exception as e:
@@ -145,26 +147,26 @@ class _SchemaManagerService:
 
         # Define sharepoint_connections table schema
         connections_columns = [
-            ColumnInfo(name="id", type_name=ColumnTypeName.STRING, comment="Connection ID"),
-            ColumnInfo(name="name", type_name=ColumnTypeName.STRING, comment="Connection display name"),
-            ColumnInfo(name="client_id", type_name=ColumnTypeName.STRING, comment="OAuth client ID"),
-            ColumnInfo(name="client_secret", type_name=ColumnTypeName.STRING, comment="OAuth client secret"),
-            ColumnInfo(name="tenant_id", type_name=ColumnTypeName.STRING, comment="Azure tenant ID"),
-            ColumnInfo(name="refresh_token", type_name=ColumnTypeName.STRING, comment="OAuth refresh token"),
-            ColumnInfo(name="site_id", type_name=ColumnTypeName.STRING, comment="SharePoint site ID"),
-            ColumnInfo(name="connection_name", type_name=ColumnTypeName.STRING, comment="Databricks connection name"),
+            ColumnInfo(name="id", position=0, type_name=ColumnTypeName.STRING, type_text="STRING", type_json='{"name":"id","type":"string","nullable":true,"metadata":{}}', comment="Connection ID"),
+            ColumnInfo(name="name", position=1, type_name=ColumnTypeName.STRING, type_text="STRING", type_json='{"name":"name","type":"string","nullable":true,"metadata":{}}', comment="Connection display name"),
+            ColumnInfo(name="client_id", position=2, type_name=ColumnTypeName.STRING, type_text="STRING", type_json='{"name":"client_id","type":"string","nullable":true,"metadata":{}}', comment="OAuth client ID"),
+            ColumnInfo(name="client_secret", position=3, type_name=ColumnTypeName.STRING, type_text="STRING", type_json='{"name":"client_secret","type":"string","nullable":true,"metadata":{}}', comment="OAuth client secret"),
+            ColumnInfo(name="tenant_id", position=4, type_name=ColumnTypeName.STRING, type_text="STRING", type_json='{"name":"tenant_id","type":"string","nullable":true,"metadata":{}}', comment="Azure tenant ID"),
+            ColumnInfo(name="refresh_token", position=5, type_name=ColumnTypeName.STRING, type_text="STRING", type_json='{"name":"refresh_token","type":"string","nullable":true,"metadata":{}}', comment="OAuth refresh token"),
+            ColumnInfo(name="site_id", position=6, type_name=ColumnTypeName.STRING, type_text="STRING", type_json='{"name":"site_id","type":"string","nullable":true,"metadata":{}}', comment="SharePoint site ID"),
+            ColumnInfo(name="connection_name", position=7, type_name=ColumnTypeName.STRING, type_text="STRING", type_json='{"name":"connection_name","type":"string","nullable":true,"metadata":{}}', comment="Databricks connection name"),
         ]
 
         # Define sharepoint_pipelines table schema
         pipelines_columns = [
-            ColumnInfo(name="id", type_name=ColumnTypeName.STRING, comment="Pipeline ID"),
-            ColumnInfo(name="name", type_name=ColumnTypeName.STRING, comment="Pipeline display name"),
-            ColumnInfo(name="connection_id", type_name=ColumnTypeName.STRING, comment="Reference to connection ID"),
-            ColumnInfo(name="ingestion_type", type_name=ColumnTypeName.STRING, comment="Type of ingestion"),
-            ColumnInfo(name="drive_names", type_name=ColumnTypeName.STRING, comment="JSON array of drive names"),
-            ColumnInfo(name="delta_table", type_name=ColumnTypeName.STRING, comment="Destination Delta table"),
-            ColumnInfo(name="file_pattern", type_name=ColumnTypeName.STRING, comment="File pattern to match"),
-            ColumnInfo(name="pipeline_id", type_name=ColumnTypeName.STRING, comment="Databricks pipeline ID"),
+            ColumnInfo(name="id", position=0, type_name=ColumnTypeName.STRING, type_text="STRING", type_json='{"name":"id","type":"string","nullable":true,"metadata":{}}', comment="Pipeline ID"),
+            ColumnInfo(name="name", position=1, type_name=ColumnTypeName.STRING, type_text="STRING", type_json='{"name":"name","type":"string","nullable":true,"metadata":{}}', comment="Pipeline display name"),
+            ColumnInfo(name="connection_id", position=2, type_name=ColumnTypeName.STRING, type_text="STRING", type_json='{"name":"connection_id","type":"string","nullable":true,"metadata":{}}', comment="Reference to connection ID"),
+            ColumnInfo(name="ingestion_type", position=3, type_name=ColumnTypeName.STRING, type_text="STRING", type_json='{"name":"ingestion_type","type":"string","nullable":true,"metadata":{}}', comment="Type of ingestion"),
+            ColumnInfo(name="drive_names", position=4, type_name=ColumnTypeName.STRING, type_text="STRING", type_json='{"name":"drive_names","type":"string","nullable":true,"metadata":{}}', comment="JSON array of drive names"),
+            ColumnInfo(name="delta_table", position=5, type_name=ColumnTypeName.STRING, type_text="STRING", type_json='{"name":"delta_table","type":"string","nullable":true,"metadata":{}}', comment="Destination Delta table"),
+            ColumnInfo(name="file_pattern", position=6, type_name=ColumnTypeName.STRING, type_text="STRING", type_json='{"name":"file_pattern","type":"string","nullable":true,"metadata":{}}', comment="File pattern to match"),
+            ColumnInfo(name="pipeline_id", position=7, type_name=ColumnTypeName.STRING, type_text="STRING", type_json='{"name":"pipeline_id","type":"string","nullable":true,"metadata":{}}', comment="Databricks pipeline ID"),
         ]
 
         # Create tables

@@ -50,6 +50,11 @@ class LakeflowJobConfig(BaseModel):
     document_pipeline_id: Optional[str] = None  # Document ingestion pipeline
     document_table: Optional[str] = None  # Full path: {catalog}.{schema}.documents
     created_at: Optional[str] = None
+    # Databricks Job fields for downstream sync task
+    job_id: Optional[str] = None  # Databricks Job ID (wraps pipeline + sync task)
+    tracked_file_path: Optional[str] = None  # Excel file to sync (file_id in documents table)
+    target_table: Optional[str] = None  # Destination Delta table for parsed Excel data
+    sync_enabled: bool = False  # Whether sync task is configured and enabled
 
 
 class ExcelStreamConfig(BaseModel):

@@ -1077,20 +1077,39 @@
                 return;
             }
             
-            jobList.innerHTML = jobs.map(job => `
+            jobList.innerHTML = jobs.map(job => {
+                const syncStatus = job.sync_enabled 
+                    ? `<span style="color: #22543d; background: #c6f6d5; padding: 2px 8px; border-radius: 4px; font-size: 0.8em;">Auto-Sync ON</span>`
+                    : `<span style="color: #718096; background: #e2e8f0; padding: 2px 8px; border-radius: 4px; font-size: 0.8em;">Auto-Sync OFF</span>`;
+                
+                const syncInfo = job.sync_enabled && job.target_table
+                    ? `<br>🔄 Syncing to: ${job.target_table}`
+                    : '';
+                
+                const syncButton = job.sync_enabled
+                    ? `<button class="btn btn-success" onclick="runSyncJob('${job.connection_id}')" style="background: #48bb78;">
+                            Run Sync
+                       </button>`
+                    : '';
+                
+                return `
                 <div class="config-item">
                     <div class="config-info">
-                        <div class="config-title">${job.connection_name}</div>
+                        <div class="config-title">
+                            ${job.connection_name}
+                            ${syncStatus}
+                        </div>
                         <div class="config-details">
                             🔗 ${job.connection_name} → 📊 ${job.destination_catalog}.${job.destination_schema}
                         </div>
                         <div style="font-size: 0.85rem; color: #888; margin-top: 5px;">
                             🌐 Site ID: ${job.source_schema || 'N/A'}<br>
                             📄 Document Table: ${job.document_table || 'N/A'}<br>
-                            🔗 Pipeline ID: ${job.document_pipeline_id || 'N/A'}
+                            🔗 Pipeline ID: ${job.document_pipeline_id || 'N/A'}${syncInfo}
                         </div>
                     </div>
                     <div class="config-actions">
+                        ${syncButton}
                         <button class="btn btn-primary" onclick="loadDocumentsTable('${job.connection_id}')" style="background: #4299e1;">
                             View Documents
                         </button>
@@ -1099,7 +1118,19 @@
                         </button>
                     </div>
                 </div>
-            `).join('');
+            `}).join('');
+        }
+        
+        async function runSyncJob(connectionId) {
+            try {
+                showAlert('Starting sync job...', 'info');
+                const result = await apiCall(`/api/lakeflow/jobs/${connectionId}/run-sync`, {
+                    method: 'POST'
+                });
+                showAlert(`Sync job triggered! Run ID: ${result.run_id}`, 'success');
+            } catch (error) {
+                showAlert('Failed to run sync job: ' + error.message, 'error');
+            }
         }
 
         async function deleteLakeflowJob(jobId) {
@@ -1713,11 +1744,15 @@
                         });
                         
                         showAlert('Lakeflow job created! Pipelines are being deployed...', 'success');
+                        
+                        // Save connection name BEFORE clearing the form (which nulls selectedConnection)
+                        const connectionNameForTracking = selectedConnection.name;
+                        
                         cancelLakeflowJobForm();
                         await loadLakeflowJobs();
                         
-                        // Start deployment tracking
-                        startDeploymentTracking(result.connection_id, selectedConnection.name);
+                        // Start deployment tracking using saved connection name
+                        startDeploymentTracking(result.connection_id, connectionNameForTracking);
                         
                     } catch (error) {
                         showAlert('Failed to create job: ' + error.message, 'error');
@@ -1979,6 +2014,9 @@
             }
         }
         
+        // Store last parse info for auto-sync setup
+        let lastParseInfo = null;
+        
         async function confirmParseWithSelection() {
             const headerRow = parseInt(document.getElementById('headerRowSelect').value);
             const selectedColumns = Array.from(
@@ -2029,12 +2067,18 @@
                 
                 const result = await response.json();
                 
-                showAlert(
-                    `Success! Created table: ${result.table_name} with ${selectedColumns.length} columns\nRows inserted: ${result.rows_inserted} of ${result.total_rows}`,
-                    'success'
-                );
+                // Store parse info for auto-sync setup
+                lastParseInfo = {
+                    connectionId: currentExcelPreview.connectionId,
+                    filePath: currentExcelPreview.file_path,
+                    tableName: tableName,
+                    headerRow: headerRow,
+                    selectedColumns: selectedColumns,
+                    result: result
+                };
                 
-                closeExcelPreview();
+                // Show success with auto-sync option
+                showAutoSyncOption(result, tableName, selectedColumns.length);
                 
                 console.log('Parse result:', result);
                 
@@ -2051,10 +2095,97 @@
             // Redirect to new function
             await confirmParseWithSelection();
         }
+        
+        function showAutoSyncOption(result, tableName, columnCount) {
+            // Update the preview content to show success and auto-sync option
+            const content = document.getElementById('previewContent');
+            content.innerHTML = `
+                <div style="text-align: center; padding: 20px;">
+                    <div style="font-size: 64px; margin-bottom: 20px;">✅</div>
+                    <h3 style="color: #22543d; margin-bottom: 15px;">Table Created Successfully!</h3>
+                    <div style="background: #f0fdf4; padding: 20px; border-radius: 8px; margin-bottom: 25px; text-align: left;">
+                        <p style="margin: 0 0 8px 0;"><strong>Table:</strong> ${result.table_name}</p>
+                        <p style="margin: 0 0 8px 0;"><strong>Columns:</strong> ${columnCount}</p>
+                        <p style="margin: 0;"><strong>Rows Inserted:</strong> ${result.rows_inserted} of ${result.total_rows}</p>
+                    </div>
+                    
+                    <div style="background: #fffbeb; padding: 20px; border-radius: 8px; border-left: 4px solid #f59e0b; margin-bottom: 25px; text-align: left;">
+                        <h4 style="margin: 0 0 10px 0; color: #92400e;">Enable Auto-Sync?</h4>
+                        <p style="margin: 0 0 15px 0; color: #78350f; font-size: 0.95em;">
+                            Would you like to automatically sync this Delta table when the Excel file changes in SharePoint?
+                            <br><br>
+                            This will run the sync task as a downstream job after each SharePoint ingestion.
+                        </p>
+                        <div style="display: flex; gap: 10px; justify-content: flex-start;">
+                            <button 
+                                onclick="enableAutoSync()"
+                                class="btn btn-primary"
+                                style="padding: 10px 20px; background: #48bb78; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">
+                                Enable Auto-Sync
+                            </button>
+                            <button 
+                                onclick="closeExcelPreview(); loadLakeflowJobs();"
+                                style="padding: 10px 20px; background: #e2e8f0; color: #2d3748; border: none; border-radius: 6px; cursor: pointer;">
+                                Skip for Now
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+        
+        async function enableAutoSync() {
+            console.log('[DEBUG] enableAutoSync called, lastParseInfo:', lastParseInfo);
+            
+            if (!lastParseInfo) {
+                console.error('[DEBUG] No lastParseInfo available!');
+                showAlert('No parse information available', 'error');
+                return;
+            }
+            
+            try {
+                const requestBody = {
+                    file_path: lastParseInfo.filePath,
+                    table_name: lastParseInfo.tableName,
+                    header_row: lastParseInfo.headerRow,
+                    selected_columns: lastParseInfo.selectedColumns
+                };
+                console.log('[DEBUG] Sending configure-sync request:', requestBody);
+                
+                const response = await fetch(`/api/lakeflow/jobs/${lastParseInfo.connectionId}/configure-sync`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(requestBody)
+                });
+                
+                console.log('[DEBUG] Response status:', response.status);
+                
+                if (!response.ok) {
+                    const error = await response.json();
+                    console.error('[DEBUG] Error response:', error);
+                    throw new Error(error.detail || 'Failed to configure auto-sync');
+                }
+                
+                const result = await response.json();
+                console.log('[DEBUG] Success response:', result);
+                
+                showAlert(`Auto-sync enabled! The table will update when the Excel file changes in SharePoint.`, 'success');
+                
+                closeExcelPreview();
+                await loadLakeflowJobs();
+                
+                console.log('Auto-sync configured:', result);
+                
+            } catch (error) {
+                console.error('Failed to enable auto-sync:', error);
+                showAlert('Failed to enable auto-sync: ' + error.message, 'error');
+            }
+        }
 
         function closeExcelPreview() {
             document.getElementById('excelPreviewModal').style.display = 'none';
             currentExcelPreview = null;
+            lastParseInfo = null;
         }
     </script>
     

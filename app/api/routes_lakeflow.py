@@ -1,11 +1,17 @@
 from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
+from typing import Optional, List
 from app.core.models import LakeflowJobConfig
 from app.services.unity_catalog import UnityCatalog
+from app.services.excel_sync_notebook import ExcelSyncNotebook
 from databricks.sdk import WorkspaceClient
 from databricks.sdk.service.pipelines import IngestionConfig, IngestionPipelineDefinition, IngestionSourceType, SchemaSpec
+from databricks.sdk.service.jobs import Task, PipelineTask, NotebookTask, TaskDependency, Source
+from databricks.sdk.service.workspace import ImportFormat, Language
 import os
 from datetime import datetime
 import uuid
+import base64
 
 router = APIRouter()
 
@@ -27,7 +33,11 @@ async def list_lakeflow_jobs():
                    destination_catalog, destination_schema, 
                    document_pipeline_id,
                    document_table,
-                   created_at
+                   created_at,
+                   job_id,
+                   tracked_file_path,
+                   target_table,
+                   sync_enabled
             FROM {jobs_table}
             ORDER BY created_at DESC
         """
@@ -44,6 +54,10 @@ async def list_lakeflow_jobs():
                 document_pipeline_id=row['document_pipeline_id'],
                 document_table=row['document_table'],
                 created_at=row['created_at'],
+                job_id=row.get('job_id'),
+                tracked_file_path=row.get('tracked_file_path'),
+                target_table=row.get('target_table'),
+                sync_enabled=bool(row.get('sync_enabled', False)),
             ))
         return jobs
     except Exception as e:
@@ -81,7 +95,11 @@ async def create_lakeflow_job(config: LakeflowJobConfig):
                 destination_schema STRING NOT NULL,
                 document_pipeline_id STRING,
                 document_table STRING,
-                created_at TIMESTAMP
+                created_at TIMESTAMP,
+                job_id STRING,
+                tracked_file_path STRING,
+                target_table STRING,
+                sync_enabled BOOLEAN
             )
         """
         UnityCatalog.query(create_table_query)
@@ -134,19 +152,83 @@ async def create_lakeflow_job(config: LakeflowJobConfig):
         config.document_pipeline_id = doc_pipeline.pipeline_id
         config.created_at = datetime.utcnow().isoformat()
         
-        # Store job config
+        # Create Databricks Job that wraps the pipeline with a downstream sync task
+        # The sync task is initially a placeholder - configured later via /configure-sync
+        notebook_path = ExcelSyncNotebook.get_notebook_path(config.connection_id)
+        
+        # Create placeholder notebook so job doesn't fail before sync is configured
+        parent_dir = "/".join(notebook_path.split("/")[:-1])
+        try:
+            w.workspace.mkdirs(path=parent_dir)
+            placeholder_code = """# Databricks notebook source
+# MAGIC %md
+# MAGIC # Placeholder Notebook
+# MAGIC 
+# MAGIC This notebook is a placeholder until sync is configured via `/configure-sync`.
+# MAGIC It will be replaced with the actual sync notebook when you configure auto-sync.
+
+# COMMAND ----------
+
+print("Sync not yet configured. Please configure sync via the UI.")
+dbutils.notebook.exit("SYNC_NOT_CONFIGURED")
+"""
+            w.workspace.import_(
+                path=notebook_path,
+                content=base64.b64encode(placeholder_code.encode()).decode(),
+                format=ImportFormat.SOURCE,
+                language=Language.PYTHON,
+                overwrite=True
+            )
+        except Exception as placeholder_err:
+            print(f"Warning: Could not create placeholder notebook: {placeholder_err}")
+        
+        job = w.jobs.create(
+            name=f"{config.connection_name}_sync_job_{unique_id}",
+            tasks=[
+                Task(
+                    task_key="ingest_sharepoint",
+                    description="Ingest documents from SharePoint to Delta table",
+                    pipeline_task=PipelineTask(
+                        pipeline_id=config.document_pipeline_id
+                    )
+                ),
+                Task(
+                    task_key="sync_excel",
+                    description="Sync tracked Excel file to Delta table (CDC)",
+                    depends_on=[TaskDependency(task_key="ingest_sharepoint")],
+                    notebook_task=NotebookTask(
+                        notebook_path=notebook_path,
+                        source=Source.WORKSPACE
+                    ),
+                    # Task is disabled until sync is configured
+                    disable_auto_optimization=True
+                )
+            ],
+            max_concurrent_runs=1
+        )
+        config.job_id = str(job.job_id)
+        
+        # Store job config (set sync_enabled to false explicitly)
         insert_query = f"""
             INSERT INTO {jobs_table}
             (connection_id, connection_name, source_schema,
              destination_catalog, destination_schema, 
              document_pipeline_id,
              document_table,
-             created_at)
+             created_at,
+             job_id,
+             tracked_file_path,
+             target_table,
+             sync_enabled)
             VALUES ('{config.connection_id}', '{config.connection_name}', '{config.source_schema}',
                     '{config.destination_catalog}', '{config.destination_schema}',
                     '{config.document_pipeline_id}',
                     '{config.document_table}',
-                    CURRENT_TIMESTAMP())
+                    CURRENT_TIMESTAMP(),
+                    '{config.job_id}',
+                    NULL,
+                    NULL,
+                    CAST(false AS BOOLEAN))
         """
         UnityCatalog.query(insert_query)
         
@@ -158,7 +240,8 @@ async def create_lakeflow_job(config: LakeflowJobConfig):
             "connection_id": config.connection_id,
             "document_pipeline_id": config.document_pipeline_id,
             "document_table": config.document_table,
-            "document_update_id": doc_update.update_id
+            "document_update_id": doc_update.update_id,
+            "job_id": config.job_id
         }
         return result
     except HTTPException:
@@ -298,11 +381,242 @@ async def get_documents_table(connection_id: str, limit: int = 100):
 
 @router.delete("/jobs/{connection_id}")
 async def delete_lakeflow_job(connection_id: str):
-    """Delete a Lakeflow job"""
+    """Delete a Lakeflow job and associated Databricks resources"""
     try:
         jobs_table = _get_lakeflow_jobs_table()
+        
+        # Get job details first to clean up Databricks resources
+        get_query = f"""
+            SELECT job_id, document_pipeline_id
+            FROM {jobs_table}
+            WHERE connection_id = '{connection_id}'
+        """
+        rows = UnityCatalog.query(get_query)
+        
+        if rows:
+            job_id = rows[0].get('job_id')
+            pipeline_id = rows[0].get('document_pipeline_id')
+            
+            w = WorkspaceClient(
+                host=os.getenv("DATABRICKS_HOST"),
+                token=os.getenv("DATABRICKS_TOKEN")
+            )
+            
+            # Delete the Databricks Job
+            if job_id:
+                try:
+                    w.jobs.delete(job_id=int(job_id))
+                except Exception as e:
+                    print(f"Warning: Could not delete job {job_id}: {e}")
+            
+            # Delete the pipeline
+            if pipeline_id:
+                try:
+                    w.pipelines.delete(pipeline_id=pipeline_id)
+                except Exception as e:
+                    print(f"Warning: Could not delete pipeline {pipeline_id}: {e}")
+            
+            # Try to delete the sync notebook
+            try:
+                notebook_path = ExcelSyncNotebook.get_notebook_path(connection_id)
+                w.workspace.delete(path=notebook_path)
+            except Exception as e:
+                print(f"Warning: Could not delete notebook: {e}")
+        
+        # Delete from database
         query = f"DELETE FROM {jobs_table} WHERE connection_id = '{connection_id}'"
         UnityCatalog.query(query)
         return {"message": "Lakeflow job deleted successfully"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to delete job: {str(e)}")
+
+
+# ============================================
+# Sync Configuration Endpoint
+# ============================================
+
+class ConfigureSyncRequest(BaseModel):
+    """Request model for configuring Excel sync"""
+    file_path: str  # file_id in documents table
+    table_name: str  # Target table name (will be created in destination schema)
+    header_row: int = 0  # Which row contains headers (0-indexed)
+    selected_columns: Optional[List[str]] = None  # Columns to include (None = all)
+
+
+@router.post("/jobs/{connection_id}/configure-sync")
+async def configure_sync(connection_id: str, request: ConfigureSyncRequest):
+    """
+    Configure auto-sync for an Excel file to a Delta table.
+    
+    This endpoint:
+    1. Generates a sync notebook with CDC logic
+    2. Uploads the notebook to the Databricks workspace
+    3. Updates the job configuration to enable the sync task
+    4. Stores the tracked file and target table in the database
+    """
+    try:
+        jobs_table = _get_lakeflow_jobs_table()
+        
+        # Get job details
+        get_query = f"""
+            SELECT job_id, document_table, destination_catalog, destination_schema
+            FROM {jobs_table}
+            WHERE connection_id = '{connection_id}'
+        """
+        rows = UnityCatalog.query(get_query)
+        
+        if not rows:
+            raise HTTPException(status_code=404, detail="Job not found")
+        
+        job_id = rows[0].get('job_id')
+        document_table = rows[0]['document_table']
+        dest_catalog = rows[0]['destination_catalog']
+        dest_schema = rows[0]['destination_schema']
+        
+        if not job_id:
+            raise HTTPException(
+                status_code=400, 
+                detail="Job does not have a Databricks Job ID. Please recreate the job."
+            )
+        
+        # Build fully qualified target table name
+        target_table = f"{dest_catalog}.{dest_schema}.{request.table_name}"
+        
+        # Generate sync notebook code
+        notebook_code = ExcelSyncNotebook.generate_sync_notebook(
+            document_table=document_table,
+            tracked_file_path=request.file_path,
+            target_table=target_table,
+            header_row=request.header_row,
+            selected_columns=request.selected_columns,
+        )
+        
+        # Upload notebook to workspace
+        w = WorkspaceClient(
+            host=os.getenv("DATABRICKS_HOST"),
+            token=os.getenv("DATABRICKS_TOKEN")
+        )
+        
+        notebook_path = ExcelSyncNotebook.get_notebook_path(connection_id)
+        
+        # Ensure parent directory exists
+        parent_dir = "/".join(notebook_path.split("/")[:-1])
+        try:
+            w.workspace.mkdirs(path=parent_dir)
+        except Exception as e:
+            print(f"Directory may already exist: {e}")
+        
+        # Import notebook (overwrite if exists)
+        w.workspace.import_(
+            path=notebook_path,
+            content=base64.b64encode(notebook_code.encode()).decode(),
+            format=ImportFormat.SOURCE,
+            language=Language.PYTHON,
+            overwrite=True
+        )
+        
+        # Escape values for SQL
+        escaped_file_path = request.file_path.replace("'", "''")
+        escaped_target_table = target_table.replace("'", "''")
+        
+        # Update job configuration in database
+        update_query = f"""
+            UPDATE {jobs_table}
+            SET tracked_file_path = '{escaped_file_path}',
+                target_table = '{escaped_target_table}',
+                sync_enabled = true
+            WHERE connection_id = '{connection_id}'
+        """
+        UnityCatalog.query(update_query)
+        
+        return {
+            "message": "Sync configured successfully",
+            "connection_id": connection_id,
+            "tracked_file_path": request.file_path,
+            "target_table": target_table,
+            "notebook_path": notebook_path,
+            "job_id": job_id,
+            "sync_enabled": True
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to configure sync: {str(e)}")
+
+
+@router.post("/jobs/{connection_id}/run-sync")
+async def run_sync_job(connection_id: str):
+    """
+    Manually trigger the sync job to run.
+    This runs both the SharePoint ingestion and the Excel sync task.
+    """
+    try:
+        jobs_table = _get_lakeflow_jobs_table()
+        
+        # Get job details
+        get_query = f"""
+            SELECT job_id, sync_enabled
+            FROM {jobs_table}
+            WHERE connection_id = '{connection_id}'
+        """
+        rows = UnityCatalog.query(get_query)
+        
+        if not rows:
+            raise HTTPException(status_code=404, detail="Job not found")
+        
+        job_id = rows[0].get('job_id')
+        sync_enabled = rows[0].get('sync_enabled', False)
+        
+        if not job_id:
+            raise HTTPException(
+                status_code=400, 
+                detail="Job does not have a Databricks Job ID"
+            )
+        
+        if not sync_enabled:
+            raise HTTPException(
+                status_code=400,
+                detail="Sync is not configured. Please configure sync first using /configure-sync"
+            )
+        
+        # Trigger the job
+        w = WorkspaceClient(
+            host=os.getenv("DATABRICKS_HOST"),
+            token=os.getenv("DATABRICKS_TOKEN")
+        )
+        
+        run = w.jobs.run_now(job_id=int(job_id))
+        
+        return {
+            "message": "Sync job triggered successfully",
+            "connection_id": connection_id,
+            "job_id": job_id,
+            "run_id": run.run_id
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to run sync job: {str(e)}")
+
+
+@router.delete("/jobs/{connection_id}/disable-sync")
+async def disable_sync(connection_id: str):
+    """Disable auto-sync for a job"""
+    try:
+        jobs_table = _get_lakeflow_jobs_table()
+        
+        # Update database to disable sync
+        update_query = f"""
+            UPDATE {jobs_table}
+            SET sync_enabled = false
+            WHERE connection_id = '{connection_id}'
+        """
+        UnityCatalog.query(update_query)
+        
+        return {
+            "message": "Sync disabled successfully",
+            "connection_id": connection_id,
+            "sync_enabled": False
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to disable sync: {str(e)}")

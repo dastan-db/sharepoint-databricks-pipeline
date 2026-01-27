@@ -40,6 +40,14 @@ class _Lakebase:
         # Use email as database user when using PAT authentication
         db_user = os.getenv("MY_EMAIL")
         
+        # Validate required environment variables
+        if not instance_name:
+            raise ValueError("LAKEBASE_INSTANCE_NAME environment variable is not set. Lakebase features are disabled.")
+        if not db_name:
+            raise ValueError("LAKEBASE_DB_NAME environment variable is not set. Lakebase features are disabled.")
+        if not db_user:
+            raise ValueError("MY_EMAIL environment variable is not set. Lakebase features are disabled.")
+        
         cred = w.database.generate_database_credential(
             request_id=str(uuid.uuid4()), instance_names=[instance_name]
         )

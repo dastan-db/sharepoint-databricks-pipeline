@@ -83,6 +83,9 @@ def list_stream_configs() -> List[ExcelStreamConfig]:
                 is_active=bool(row[9]) if row[9] is not None else False,
             ))
         return configs
+    except ValueError as e:
+        # Lakebase not configured - return empty list
+        return []
     except Exception as e:
         if "does not exist" in str(e).lower() or "not found" in str(e).lower():
             return []
