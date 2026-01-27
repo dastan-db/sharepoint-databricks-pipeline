@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Debug - Lakeflow Jobs</title>
+    <style>
+        body {
+            font-family: monospace;
+            padding: 20px;
+            background: #1e1e1e;
+            color: #d4d4d4;
+        }
+        .section {
+            background: #252526;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 5px;
+            border-left: 3px solid #007acc;
+        }
+        button {
+            background: #007acc;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #005a9e;
+        }
+        pre {
+            background: #1e1e1e;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+        .success { color: #4ec9b0; }
+        .error { color: #f48771; }
+        .info { color: #dcdcaa; }
+    </style>
+</head>
+<body>
+    <h1>🔍 Lakeflow Jobs Debug Tool</h1>
+    
+    <div class="section">
+        <h2>Step 1: List All Jobs</h2>
+        <button onclick="listJobs()">List Jobs</button>
+        <pre id="jobs-output">Click button to load...</pre>
+    </div>
+    
+    <div class="section">
+        <h2>Step 2: Get Job Status</h2>
+        <input type="text" id="connection-id" placeholder="Enter connection_id" value="sharepoint-fe" style="padding: 8px; width: 300px;">
+        <button onclick="getStatus()">Get Status</button>
+        <pre id="status-output">Enter connection_id and click button...</pre>
+    </div>
+    
+    <div class="section">
+        <h2>Step 3: List Documents</h2>
+        <button onclick="listDocuments()">List Documents</button>
+        <pre id="documents-output">Click button to load...</pre>
+    </div>
+
+    <script>
+        const API_BASE = '';
+
+        async function listJobs() {
+            const output = document.getElementById('jobs-output');
+            output.innerHTML = '<span class="info">Loading...</span>';
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/lakeflow/jobs`);
+                const jobs = await response.json();
+                
+                let html = `<span class="success">✅ Found ${jobs.length} job(s)</span>\n\n`;
+                jobs.forEach((job, i) => {
+                    html += `<span class="info">Job ${i + 1}:</span>\n`;
+                    html += `  connection_id: ${job.connection_id}\n`;
+                    html += `  connection_name: ${job.connection_name}\n`;
+                    html += `  document_table: ${job.document_table}\n`;
+                    html += `  pipeline_id: ${job.document_pipeline_id}\n`;
+                    html += `  created_at: ${job.created_at}\n\n`;
+                });
+                
+                output.innerHTML = html;
+            } catch (error) {
+                output.innerHTML = `<span class="error">❌ Error: ${error.message}</span>`;
+            }
+        }
+
+        async function getStatus() {
+            const connectionId = document.getElementById('connection-id').value;
+            const output = document.getElementById('status-output');
+            output.innerHTML = '<span class="info">Loading...</span>';
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/lakeflow/jobs/${connectionId}/status`);
+                const status = await response.json();
+                
+                let html = `<span class="success">✅ Status Retrieved</span>\n\n`;
+                html += JSON.stringify(status, null, 2);
+                
+                output.innerHTML = html;
+            } catch (error) {
+                output.innerHTML = `<span class="error">❌ Error: ${error.message}</span>`;
+            }
+        }
+
+        async function listDocuments() {
+            const connectionId = document.getElementById('connection-id').value;
+            const output = document.getElementById('documents-output');
+            output.innerHTML = '<span class="info">Loading...</span>';
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/lakeflow/jobs/${connectionId}/documents?limit=10`);
+                const data = await response.json();
+                
+                let html = `<span class="success">✅ Documents Retrieved</span>\n\n`;
+                html += `Table: ${data.table}\n`;
+                html += `Count: ${data.count}\n\n`;
+                
+                if (data.documents && data.documents.length > 0) {
+                    html += `<span class="info">Documents:</span>\n`;
+                    data.documents.forEach((doc, i) => {
+                        html += `  ${i + 1}. ${doc.name}\n`;
+                        html += `     Size: ${doc.size} bytes\n`;
+                        html += `     Modified: ${doc.modification_time}\n`;
+                        html += `     Path: ${doc.path}\n\n`;
+                    });
+                } else {
+                    html += `<span class="error">No documents found</span>\n`;
+                    html += `Message: ${data.message || 'N/A'}`;
+                }
+                
+                output.innerHTML = html;
+            } catch (error) {
+                output.innerHTML = `<span class="error">❌ Error: ${error.message}</span>`;
+            }
+        }
+
+        // Auto-load jobs on page load
+        window.addEventListener('DOMContentLoaded', () => {
+            listJobs();
+        });
+    </script>
+</body>
+</html>

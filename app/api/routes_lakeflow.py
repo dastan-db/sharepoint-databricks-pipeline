@@ -193,19 +193,26 @@ async def get_lakeflow_job_status(connection_id: str):
         
         # Get document pipeline status
         doc_pipeline = w.pipelines.get(pipeline_id=doc_pipeline_id)
-        doc_updates = list(w.pipelines.list_updates(pipeline_id=doc_pipeline_id, max_results=1))
         
+        # Get latest update - iterate through the response properly
         doc_status = {
             "state": doc_pipeline.state.value if doc_pipeline.state else "UNKNOWN",
             "latest_update": None
         }
         
-        if doc_updates:
-            latest = doc_updates[0]
-            doc_status["latest_update"] = {
-                "update_id": latest.update_id,
-                "state": latest.state.value if latest.state else "UNKNOWN",
-            }
+        try:
+            # list_updates returns a Page object, we need to iterate it properly
+            updates_iter = w.pipelines.list_updates(pipeline_id=doc_pipeline_id, max_results=1)
+            first_update = next(iter(updates_iter), None)
+            
+            if first_update:
+                doc_status["latest_update"] = {
+                    "update_id": first_update.update_id,
+                    "state": first_update.state.value if first_update.state else "UNKNOWN",
+                }
+        except Exception as update_err:
+            # If we can't get updates, just return the pipeline state
+            print(f"Warning: Could not get pipeline updates: {update_err}")
         
         return {
             "connection_id": connection_id,

@@ -86,49 +86,61 @@ async def list_connections() -> List[SharePointConnection]:
 
 @router.post("/connections")
 async def create_connection(connection: SharePointConnection) -> dict:
-    """Create a new SharePoint connection."""
+    """
+    Create a new SharePoint connection in Unity Catalog.
+    
+    This creates a native Unity Catalog SHAREPOINT connection that can be used
+    with Lakeflow pipelines and other Databricks features.
+    """
     try:
-        connections_table = _get_connections_table()
+        from app.services.unity_catalog import UnityCatalog
         
-        # Tables are now initialized by SchemaManager on app startup
-        # No need for CREATE TABLE IF NOT EXISTS here
+        # Build CREATE CONNECTION SQL for Unity Catalog
+        # Use the connection name from the model or generate one
+        conn_name = connection.connection_name or connection.name.lower().replace(" ", "_")
         
-        # Generate connection name via service
-        connection_name = await asyncio.to_thread(
-            SharePointConnector.create_connection, connection
-        )
-        if not connection.connection_name:
-            connection.connection_name = connection_name
-        
-        # SECURE: Use escaped values to prevent SQL injection
-        # TODO: Switch to parameterized queries when databricks_tools_core supports it
-        escaped_id = _escape_sql_string(connection.id)
-        escaped_name = _escape_sql_string(connection.name)
-        escaped_client_id = _escape_sql_string(connection.client_id)
-        escaped_client_secret = _escape_sql_string(connection.client_secret)
-        escaped_tenant_id = _escape_sql_string(connection.tenant_id)
-        escaped_refresh_token = _escape_sql_string(connection.refresh_token)
-        escaped_site_id = _escape_sql_string(connection.site_id)
-        escaped_connection_name = _escape_sql_string(connection.connection_name)
-        
-        insert_query = f"""
-            INSERT INTO {connections_table} 
-            (id, name, client_id, client_secret, tenant_id, refresh_token, site_id, connection_name)
-            VALUES ('{escaped_id}', '{escaped_name}', '{escaped_client_id}', 
-                    '{escaped_client_secret}', '{escaped_tenant_id}', '{escaped_refresh_token}',
-                    '{escaped_site_id}', '{escaped_connection_name}')
-            RETURNING *
+        # Create Unity Catalog SharePoint connection
+        create_sql = f"""
+            CREATE CONNECTION IF NOT EXISTS {conn_name}
+            TYPE SHAREPOINT
+            OPTIONS (
+                host 'graph.microsoft.com',
+                clientId '{connection.client_id}',
+                clientSecret '{connection.client_secret}',
+                tenantId '{connection.tenant_id}',
+                refreshToken '{connection.refresh_token}'
+            )
+            COMMENT '{connection.site_id or connection.name}'
         """
         
-        catalog = os.getenv("UC_CATALOG", "main")
-        schema = os.getenv("SHAREPOINT_SCHEMA_PREFIX", "sharepoint")
-        await SecureSQL.execute_query(insert_query, catalog=catalog, schema=schema)
+        # Execute via UnityCatalog service
+        try:
+            UnityCatalog.query(create_sql)
+        except Exception as create_err:
+            # If connection already exists, that's okay for testing
+            if "already exists" in str(create_err).lower():
+                return {
+                    "message": f"Connection '{conn_name}' already exists",
+                    "id": conn_name,
+                    "connection_name": conn_name
+                }
+            raise
         
-        return {"message": "Connection created successfully", "id": connection.id}
+        return {
+            "message": "Unity Catalog SharePoint connection created successfully",
+            "id": conn_name,
+            "connection_name": conn_name
+        }
     except Exception as e:
-        if "already exists" in str(e).lower() or "duplicate" in str(e).lower():
-            raise HTTPException(status_code=400, detail=f"Connection with id '{connection.id}' already exists")
-        raise HTTPException(status_code=500, detail=f"Failed to create connection: {str(e)}")
+        if "already exists" in str(e).lower():
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Connection already exists. Use the existing connection from the list above."
+            )
+        raise HTTPException(
+            status_code=500, 
+            detail=f"Failed to create Unity Catalog connection: {str(e)}"
+        )
 
 
 @router.get("/connections/{connection_id}")

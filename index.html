@@ -316,6 +316,16 @@
         <div class="card">
             <h2>SharePoint Connections</h2>
             
+            <!-- Info box about connections -->
+            <div style="background: #e7f3ff; border-left: 4px solid #667eea; padding: 15px; border-radius: 6px; margin-bottom: 20px;">
+                <strong>ℹ️ Using Unity Catalog Connections</strong>
+                <p style="margin: 8px 0 0 0; font-size: 0.95rem; color: #2c5282;">
+                    This app uses SharePoint connections from Unity Catalog. 
+                    Select an existing connection below to create Lakeflow jobs. 
+                    To create new connections, use the Databricks UI or the form below.
+                </p>
+            </div>
+            
             <!-- Search bar for filtering connections -->
             <div class="search-container" style="margin-bottom: 20px;">
                 <input 
@@ -330,49 +340,78 @@
             <!-- Connection list shown below search -->
             <div id="sharepointConnectionList" class="config-list" style="margin-bottom: 20px;">
                 <div class="empty-state">
-                    <p>No SharePoint connections yet. Click the button below to add one!</p>
+                    <p>Loading SharePoint connections from Unity Catalog...</p>
                 </div>
             </div>
 
             <!-- Toggle button to show/hide the form -->
             <button id="toggleConnectionFormBtn" class="btn btn-secondary" style="margin-bottom: 15px;">
-                + Add New Connection
+                + Create New Unity Catalog Connection
             </button>
 
             <!-- Form hidden by default -->
             <form id="sharepointConnectionForm" style="display: none;">
+                <div style="background: #fffbeb; border-left: 4px solid #f59e0b; padding: 15px; border-radius: 6px; margin-bottom: 20px;">
+                    <strong>⚠️ Advanced Feature</strong>
+                    <p style="margin: 8px 0 0 0; font-size: 0.9rem; color: #92400e;">
+                        This creates a Unity Catalog SharePoint connection with OAuth User-to-Machine (U2M) credentials.
+                        You'll need Azure Entra ID app credentials and an OAuth refresh token.
+                    </p>
+                </div>
+                
                 <div class="form-grid">
                     <div class="form-group">
                         <label for="spConnectionId">Connection ID *</label>
                         <input type="text" id="spConnectionId" required placeholder="e.g., sharepoint_main">
+                        <small style="color: #666; display: block; margin-top: 4px;">
+                            Unique identifier for this connection (lowercase, no spaces)
+                        </small>
                     </div>
                     <div class="form-group">
                         <label for="spConnectionName">Connection Name *</label>
                         <input type="text" id="spConnectionName" required placeholder="e.g., Main SharePoint">
+                        <small style="color: #666; display: block; margin-top: 4px;">
+                            Display name for this connection
+                        </small>
                     </div>
                     <div class="form-group">
-                        <label for="spClientId">Client ID *</label>
-                        <input type="text" id="spClientId" required placeholder="Azure Entra ID Client ID">
+                        <label for="spClientId">Azure Client ID *</label>
+                        <input type="text" id="spClientId" required placeholder="Azure Entra ID App Client ID">
+                        <small style="color: #666; display: block; margin-top: 4px;">
+                            From your Azure Entra ID app registration
+                        </small>
                     </div>
                     <div class="form-group">
-                        <label for="spClientSecret">Client Secret *</label>
-                        <input type="password" id="spClientSecret" required placeholder="Azure Client Secret">
+                        <label for="spClientSecret">Azure Client Secret *</label>
+                        <input type="password" id="spClientSecret" required placeholder="Azure App Client Secret">
+                        <small style="color: #666; display: block; margin-top: 4px;">
+                            Secret value from your Azure app
+                        </small>
                     </div>
                     <div class="form-group">
-                        <label for="spTenantId">Tenant ID *</label>
-                        <input type="text" id="spTenantId" required placeholder="Azure Tenant ID">
+                        <label for="spTenantId">Azure Tenant ID *</label>
+                        <input type="text" id="spTenantId" required placeholder="Azure AD Tenant ID">
+                        <small style="color: #666; display: block; margin-top: 4px;">
+                            Your Microsoft 365 tenant ID
+                        </small>
                     </div>
                     <div class="form-group">
-                        <label for="spRefreshToken">Refresh Token *</label>
-                        <input type="password" id="spRefreshToken" required placeholder="OAuth Refresh Token">
+                        <label for="spRefreshToken">OAuth Refresh Token *</label>
+                        <input type="password" id="spRefreshToken" required placeholder="User OAuth Refresh Token">
+                        <small style="color: #666; display: block; margin-top: 4px;">
+                            OAuth U2M refresh token for user authentication
+                        </small>
                     </div>
                     <div class="form-group">
-                        <label for="spSiteId">SharePoint Site ID *</label>
-                        <input type="text" id="spSiteId" required placeholder="SharePoint Site ID">
+                        <label for="spSiteId">SharePoint Site ID (Optional)</label>
+                        <input type="text" id="spSiteId" placeholder="Site ID for documentation">
+                        <small style="color: #666; display: block; margin-top: 4px;">
+                            Stored in connection comment for reference
+                        </small>
                     </div>
                 </div>
                 <button type="submit" class="btn btn-primary">
-                    <span id="createSpConnectionBtnText">Create Connection</span>
+                    <span id="createSpConnectionBtnText">Create Unity Catalog Connection</span>
                     <span id="createSpConnectionBtnLoading" class="loading hidden"></span>
                 </button>
             </form>
@@ -827,22 +866,22 @@
         async function createSharePointConnection(connectionData) {
             try {
                 setLoading('createSpConnectionBtnText', 'createSpConnectionBtnLoading', true);
-                await apiCall('/sharepoint/connections', {
+                const result = await apiCall('/sharepoint/connections', {
                     method: 'POST',
                     body: JSON.stringify(connectionData),
                 });
-                showAlert('SharePoint connection created successfully!', 'success');
+                showAlert('Unity Catalog SharePoint connection created successfully!', 'success');
                 document.getElementById('sharepointConnectionForm').reset();
                 await loadSharePointConnections();
                 
                 // Hide form and reset button after successful creation
                 document.getElementById('sharepointConnectionForm').style.display = 'none';
                 const btn = document.getElementById('toggleConnectionFormBtn');
-                btn.textContent = '+ Add New Connection';
+                btn.textContent = '+ Create New Unity Catalog Connection';
                 btn.classList.remove('btn-danger');
                 btn.classList.add('btn-secondary');
             } catch (error) {
-                showAlert('Failed to create connection: ' + error.message, 'error');
+                showAlert('Failed to create Unity Catalog connection: ' + error.message, 'error');
             } finally {
                 setLoading('createSpConnectionBtnText', 'createSpConnectionBtnLoading', false);
             }
@@ -1460,7 +1499,7 @@
                 btn.classList.add('btn-danger');
             } else {
                 form.style.display = 'none';
-                btn.textContent = '+ Add New Connection';
+                btn.textContent = '+ Create New Unity Catalog Connection';
                 btn.classList.remove('btn-danger');
                 btn.classList.add('btn-secondary');
             }
@@ -1476,8 +1515,8 @@
                 client_secret: document.getElementById('spClientSecret').value,
                 tenant_id: document.getElementById('spTenantId').value,
                 refresh_token: document.getElementById('spRefreshToken').value,
-                site_id: document.getElementById('spSiteId').value,
-                connection_name: '',
+                site_id: document.getElementById('spSiteId').value || '',  // Optional
+                connection_name: document.getElementById('spConnectionId').value,  // Use ID as connection name
             };
             
             await createSharePointConnection(connectionData);

@@ -112,9 +112,6 @@ class _SchemaManagerService:
             # Create table if it doesn't exist
             try:
                 table_comment = comment or f"Auto-created by SchemaManager"
-                # #region agent log
-                import json;open('/Users/dastan.aitzhanov/projects/fe-vibe-app/.cursor/debug.log','a').write(json.dumps({"location":"schema_manager.py:114","message":"Before table create","data":{"catalog":catalog,"schema":schema,"table_name":table_name,"table_type":str(TableType.MANAGED),"data_source_format":str(DataSourceFormat.DELTA),"has_columns":len(columns)>0},"timestamp":__import__('time').time()*1000,"sessionId":"debug-session","hypothesisId":"H1-H3"})+'\n')
-                # #endregion
                 w.tables.create(
                     catalog_name=catalog,
                     schema_name=schema,
@@ -125,14 +122,8 @@ class _SchemaManagerService:
                     storage_location="",  # Empty for MANAGED tables
                     properties={"comment": table_comment},
                 )
-                # #region agent log
-                open('/Users/dastan.aitzhanov/projects/fe-vibe-app/.cursor/debug.log','a').write(json.dumps({"location":"schema_manager.py:127","message":"Table created successfully","data":{"full_name":full_name},"timestamp":__import__('time').time()*1000,"sessionId":"debug-session","hypothesisId":"SUCCESS"})+'\n')
-                # #endregion
                 return True
             except Exception as e:
-                # #region agent log
-                import traceback;open('/Users/dastan.aitzhanov/projects/fe-vibe-app/.cursor/debug.log','a').write(json.dumps({"location":"schema_manager.py:133","message":"Table create failed","data":{"full_name":full_name,"error":str(e),"error_type":type(e).__name__,"traceback":traceback.format_exc()},"timestamp":__import__('time').time()*1000,"sessionId":"debug-session","hypothesisId":"H1-H5"})+'\n')
-                # #endregion
                 if "already exists" not in str(e).lower():
                     raise Exception(f"Failed to create table {full_name}: {str(e)}")
                 return True
