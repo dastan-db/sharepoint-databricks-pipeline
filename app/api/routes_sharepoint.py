@@ -10,6 +10,20 @@ from app.services.sharepoint_connector import SharePointConnector
 router = APIRouter()
 
 
+def _get_connections_table():
+    """Get fully qualified table name for SharePoint connections"""
+    catalog = os.getenv("UC_CATALOG", "main")
+    schema = os.getenv("SHAREPOINT_SCHEMA_PREFIX", "sharepoint")
+    return f"{catalog}.{schema}.sharepoint_connections"
+
+
+def _get_pipelines_table():
+    """Get fully qualified table name for SharePoint pipelines"""
+    catalog = os.getenv("UC_CATALOG", "main")
+    schema = os.getenv("SHAREPOINT_SCHEMA_PREFIX", "sharepoint")
+    return f"{catalog}.{schema}.sharepoint_pipelines"
+
+
 # ============================================
 # Connection Endpoints
 # ============================================
@@ -18,23 +32,10 @@ router = APIRouter()
 def list_connections() -> List[SharePointConnection]:
     """List all SharePoint Lakeflow connector configurations."""
     try:
-        # region agent log
-        import time
-        from databricks.sdk import WorkspaceClient
-        import os
-        with open('/Users/dastan.aitzhanov/projects/fe-vibe-app/.cursor/debug.log', 'a') as f:
-            f.write(json.dumps({"sessionId":"debug-session","runId":"lakeflow-search","hypothesisId":"LAKEFLOW","location":"routes_sharepoint.py:21","message":"Searching for Lakeflow connectors","data":{},"timestamp":int(time.time()*1000)})+'\n')
-        # endregion
-        
         # Get all connections from Databricks
         # Use SHOW CONNECTIONS; SQL query via Unity Catalog
         query = "SHOW CONNECTIONS"
         results = UnityCatalog.query(query)
-        
-        # region agent log
-        with open('/Users/dastan.aitzhanov/projects/fe-vibe-app/.cursor/debug.log', 'a') as f:
-            f.write(json.dumps({"sessionId":"debug-session","runId":"sql-connections","hypothesisId":"SQL","location":"routes_sharepoint.py:30","message":"SHOW CONNECTIONS results","data":{"total":len(results),"sample":results[:5]},"timestamp":int(time.time()*1000)})+'\n')
-        # endregion
         
         # Filter for SharePoint connections only
         sharepoint_connections = [
@@ -76,17 +77,17 @@ def create_connection(connection: SharePointConnection) -> dict:
         # Create table if it doesn't exist
         create_table_query = f"""
             CREATE TABLE IF NOT EXISTS {connections_table} (
-                id VARCHAR PRIMARY KEY,
-                name VARCHAR NOT NULL,
-                client_id VARCHAR NOT NULL,
-                client_secret VARCHAR NOT NULL,
-                tenant_id VARCHAR NOT NULL,
-                refresh_token VARCHAR NOT NULL,
-                site_id VARCHAR NOT NULL,
-                connection_name VARCHAR NOT NULL
+                id STRING PRIMARY KEY,
+                name STRING NOT NULL,
+                client_id STRING NOT NULL,
+                client_secret STRING NOT NULL,
+                tenant_id STRING NOT NULL,
+                refresh_token STRING NOT NULL,
+                site_id STRING NOT NULL,
+                connection_name STRING NOT NULL
             )
         """
-        Lakebase.query(create_table_query)
+        UnityCatalog.query(create_table_query)
         
         # Generate connection name via service
         connection_name = SharePointConnector.create_connection(connection)
@@ -100,9 +101,8 @@ def create_connection(connection: SharePointConnection) -> dict:
             VALUES ('{connection.id}', '{connection.name}', '{connection.client_id}', 
                     '{connection.client_secret}', '{connection.tenant_id}', '{connection.refresh_token}',
                     '{connection.site_id}', '{connection.connection_name}')
-            RETURNING *
         """
-        Lakebase.query(insert_query)
+        UnityCatalog.query(insert_query)
         
         return {"message": "Connection created successfully", "id": connection.id}
     except Exception as e:
@@ -121,21 +121,21 @@ def get_connection(connection_id: str) -> SharePointConnection:
             FROM {connections_table}
             WHERE id = '{connection_id}'
         """
-        rows = Lakebase.query(query)
+        rows = UnityCatalog.query(query)
         
         if not rows:
             raise HTTPException(status_code=404, detail=f"Connection '{connection_id}' not found")
         
         row = rows[0]
         return SharePointConnection(
-            id=row[0],
-            name=row[1],
-            client_id=row[2],
-            client_secret=row[3],
-            tenant_id=row[4],
-            refresh_token=row[5],
-            site_id=row[6],
-            connection_name=row[7],
+            id=row['id'],
+            name=row['name'],
+            client_id=row['client_id'],
+            client_secret=row['client_secret'],
+            tenant_id=row['tenant_id'],
+            refresh_token=row['refresh_token'],
+            site_id=row['site_id'],
+            connection_name=row['connection_name'],
         )
     except HTTPException:
         raise
@@ -151,14 +151,14 @@ def delete_connection(connection_id: str) -> dict:
         
         # Check if connection exists
         check_query = f"SELECT id FROM {connections_table} WHERE id = '{connection_id}'"
-        rows = Lakebase.query(check_query)
+        rows = UnityCatalog.query(check_query)
         
         if not rows:
             raise HTTPException(status_code=404, detail=f"Connection '{connection_id}' not found")
         
         # Delete the connection
         delete_query = f"DELETE FROM {connections_table} WHERE id = '{connection_id}' RETURNING *"
-        Lakebase.query(delete_query)
+        UnityCatalog.query(delete_query)
         
         return {"message": "Connection deleted successfully", "id": connection_id}
     except HTTPException:
@@ -199,20 +199,20 @@ def list_pipelines() -> List[SharePointPipelineConfig]:
             FROM {pipelines_table}
             ORDER BY name
         """
-        rows = Lakebase.query(query)
+        rows = UnityCatalog.query(query)
         
         pipelines = []
         for row in rows:
-            drive_names = json.loads(row[4]) if row[4] else None
+            drive_names = json.loads(row['drive_names']) if row.get('drive_names') else None
             pipelines.append(SharePointPipelineConfig(
-                id=row[0],
-                name=row[1],
-                connection_id=row[2],
-                ingestion_type=row[3],
+                id=row['id'],
+                name=row['name'],
+                connection_id=row['connection_id'],
+                ingestion_type=row['ingestion_type'],
                 drive_names=drive_names,
-                delta_table=row[5],
-                file_pattern=row[6] if row[6] else "*.xlsx",
-                pipeline_id=row[7],
+                delta_table=row['delta_table'],
+                file_pattern=row.get('file_pattern') or "*.xlsx",
+                pipeline_id=row.get('pipeline_id'),
             ))
         return pipelines
     except Exception as e:
@@ -231,17 +231,17 @@ def create_pipeline(config: SharePointPipelineConfig) -> dict:
         # Create table if it doesn't exist
         create_table_query = f"""
             CREATE TABLE IF NOT EXISTS {pipelines_table} (
-                id VARCHAR PRIMARY KEY,
-                name VARCHAR NOT NULL,
-                connection_id VARCHAR NOT NULL,
-                ingestion_type VARCHAR NOT NULL,
-                drive_names VARCHAR,
-                delta_table VARCHAR NOT NULL,
-                file_pattern VARCHAR DEFAULT '*.xlsx',
-                pipeline_id VARCHAR
+                id STRING PRIMARY KEY,
+                name STRING NOT NULL,
+                connection_id STRING NOT NULL,
+                ingestion_type STRING NOT NULL,
+                drive_names STRING,
+                delta_table STRING NOT NULL,
+                file_pattern STRING DEFAULT '*.xlsx',
+                pipeline_id STRING
             )
         """
-        Lakebase.query(create_table_query)
+        UnityCatalog.query(create_table_query)
         
         # Get connection details
         connection = get_connection(config.connection_id)
@@ -262,9 +262,8 @@ def create_pipeline(config: SharePointPipelineConfig) -> dict:
             VALUES ('{config.id}', '{config.name}', '{config.connection_id}', 
                     '{config.ingestion_type}', {drive_names_str},
                     '{config.delta_table}', '{config.file_pattern}', '{config.pipeline_id}')
-            RETURNING *
         """
-        Lakebase.query(insert_query)
+        UnityCatalog.query(insert_query)
         
         return {
             "message": "Pipeline created successfully", 
@@ -290,22 +289,22 @@ def get_pipeline(pipeline_id: str) -> SharePointPipelineConfig:
             FROM {pipelines_table}
             WHERE id = '{pipeline_id}'
         """
-        rows = Lakebase.query(query)
+        rows = UnityCatalog.query(query)
         
         if not rows:
             raise HTTPException(status_code=404, detail=f"Pipeline '{pipeline_id}' not found")
         
         row = rows[0]
-        drive_names = json.loads(row[4]) if row[4] else None
+        drive_names = json.loads(row['drive_names']) if row.get('drive_names') else None
         return SharePointPipelineConfig(
-            id=row[0],
-            name=row[1],
-            connection_id=row[2],
-            ingestion_type=row[3],
+            id=row['id'],
+            name=row['name'],
+            connection_id=row['connection_id'],
+            ingestion_type=row['ingestion_type'],
             drive_names=drive_names,
-            delta_table=row[5],
-            file_pattern=row[6] if row[6] else "*.xlsx",
-            pipeline_id=row[7],
+            delta_table=row['delta_table'],
+            file_pattern=row.get('file_pattern') or "*.xlsx",
+            pipeline_id=row.get('pipeline_id'),
         )
     except HTTPException:
         raise
@@ -328,7 +327,7 @@ def delete_pipeline(pipeline_id: str) -> dict:
         
         # Delete from database
         delete_query = f"DELETE FROM {pipelines_table} WHERE id = '{pipeline_id}' RETURNING *"
-        Lakebase.query(delete_query)
+        UnityCatalog.query(delete_query)
         
         return {"message": "Pipeline deleted successfully", "id": pipeline_id}
     except HTTPException:

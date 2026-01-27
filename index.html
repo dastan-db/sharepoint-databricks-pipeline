@@ -333,13 +333,6 @@
                 </div>
             </div>
 
-            <!-- Use Connection button - appears after selection -->
-            <div id="useConnectionBtnContainer" style="display: none; margin-top: 15px; text-align: right;">
-                <button id="useConnectionBtn" class="btn btn-primary" onclick="showFilePickerModal()">
-                    Use Connection
-                </button>
-            </div>
-
             <!-- Toggle button to show/hide the form -->
             <button id="toggleConnectionFormBtn" class="btn btn-secondary" style="margin-bottom: 15px;">
                 + Add New Connection
@@ -384,89 +377,34 @@
             </form>
         </div>
 
-        <!-- File Picker Modal -->
-        <div id="filePickerModal" class="modal" style="display: none;">
-            <div class="modal-content" style="max-width: 700px;">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                    <h3 style="margin: 0;">Select Excel File from SharePoint</h3>
-                    <button onclick="closeFilePickerModal()" style="background: none; border: none; font-size: 24px; cursor: pointer;">&times;</button>
-                </div>
-                
-                <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
-                    <strong>Connection:</strong> <span id="modalConnectionName"></span>
-                </div>
-                
-                <form id="filePickerForm">
-                    <div class="form-group">
-                        <label for="sharePointFileUrl">SharePoint File URL *</label>
-                        <input 
-                            type="text" 
-                            id="sharePointFileUrl" 
-                            required 
-                            placeholder="https://yourcompany.sharepoint.com/sites/site-name/Documents/file.xlsx"
-                            style="font-family: monospace; font-size: 0.9rem;"
-                        />
-                        <small style="color: #666; display: block; margin-top: 5px;">
-                            Enter the full SharePoint URL to your Excel file
-                        </small>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="excelSheetName">Sheet Name (optional)</label>
-                        <input 
-                            type="text" 
-                            id="excelSheetName" 
-                            placeholder="Sheet1"
-                        />
-                        <small style="color: #666; display: block; margin-top: 5px;">
-                            Leave blank to use the first sheet
-                        </small>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="excelDataRange">Data Range (optional)</label>
-                        <input 
-                            type="text" 
-                            id="excelDataRange" 
-                            placeholder="A1:Y200"
-                        />
-                        <small style="color: #666; display: block; margin-top: 5px;">
-                            Specify the cell range to read (e.g., A1:Y200)
-                        </small>
-                    </div>
-                    
-                    <div style="display: flex; gap: 10px; justify-content: flex-end;">
-                        <button type="button" class="btn btn-secondary" onclick="closeFilePickerModal()">
-                            Cancel
-                        </button>
-                        <button type="submit" class="btn btn-primary">
-                            <span id="filePickerBtnText">Select File</span>
-                            <span id="filePickerBtnLoading" class="loading hidden"></span>
-                        </button>
-                    </div>
-                </form>
-            </div>
-        </div>
-
         <!-- Lakeflow Job Creation -->
-        <div class="card">
+        <div class="card" id="lakeflowJobCard">
             <h2>Lakeflow Jobs - SharePoint to Unity Catalog</h2>
             <p style="color: #666; margin-bottom: 15px; font-size: 0.9rem;">
                 Create streaming ingestion jobs that automatically sync all files from SharePoint to Unity Catalog Delta tables
             </p>
             
+            <!-- Instruction when no connection selected -->
+            <div id="lakeflowJobInstructions" style="padding: 20px; background: #e7f3ff; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #667eea;">
+                <strong>👆 Step 1:</strong> Select a SharePoint connection above to create a new Lakeflow job
+            </div>
+            
             <!-- Create Job Form -->
-            <div id="lakeflowJobFormContainer" style="display: none; margin-bottom: 20px; padding: 20px; background: #f8f9fa; border-radius: 8px;">
-                <h3 style="margin-top: 0;">Create New Lakeflow Job</h3>
+            <div id="lakeflowJobFormContainer" style="display: none; margin-bottom: 20px; padding: 20px; background: #f0fdf4; border-radius: 8px; border-left: 4px solid #48bb78;">
+                <h3 style="margin-top: 0; color: #22543d;">✓ Connection Selected - Create New Lakeflow Job</h3>
+                <p style="color: #666; margin-bottom: 15px; font-size: 0.95rem;">
+                    This will create <strong>two pipelines</strong>:
+                    <br>1. <strong>Document Table</strong> - Ingests all files from SharePoint with metadata
+                    <br>2. <strong>Change Detection</strong> - Tracks file changes and updates target table using CDC
+                </p>
                 <form id="lakeflowJobForm">
                     <div class="form-grid">
                         <div class="form-group">
-                            <label for="lfJobId">Job ID *</label>
-                            <input type="text" id="lfJobId" required placeholder="e.g., sharepoint_ingestion_hr">
-                        </div>
-                        <div class="form-group">
-                            <label for="lfJobName">Job Name *</label>
-                            <input type="text" id="lfJobName" required placeholder="e.g., HR SharePoint Ingestion">
+                            <label for="lfSiteId">SharePoint Site ID *</label>
+                            <input type="text" id="lfSiteId" required placeholder="e.g., 6d152e54-1e19-45d9-a362-af47be1b3ba9">
+                            <small style="color: #666; display: block; margin-top: 5px;">
+                                The UUID of the SharePoint site to ingest from
+                            </small>
                         </div>
                         <div class="form-group">
                             <label for="lfDestCatalog">Destination Catalog *</label>
@@ -483,7 +421,8 @@
                     
                     <div style="background: #fff; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
                         <strong>Selected Connection:</strong> <span id="lfSelectedConnection">None</span><br>
-                        <strong>Site ID:</strong> <span id="lfSelectedSiteId">-</span>
+                        <strong>Document Table:</strong> <span id="lfDocTableName">-</span><br>
+                        <strong>Target Table:</strong> <span id="lfTargetTableName">-</span>
                     </div>
                     
                     <div style="display: flex; gap: 10px;">
@@ -498,10 +437,62 @@
                 </form>
             </div>
             
-            <!-- Create Job Button -->
-            <button id="createLakeflowJobBtn" class="btn btn-primary" onclick="showLakeflowJobForm()" style="margin-bottom: 20px;">
-                + Create Lakeflow Job
-            </button>
+            <!-- Deployment Status Tracker -->
+            <div id="deploymentStatusContainer" style="display: none; margin-bottom: 20px; padding: 20px; background: #fffbeb; border-radius: 8px; border-left: 4px solid #f59e0b;">
+                <h3 style="margin-top: 0; color: #92400e;">⚙️ Deployment in Progress</h3>
+                <div style="margin-bottom: 15px;">
+                    <strong>Connection:</strong> <span id="deployConnectionName">-</span>
+                </div>
+                <div style="margin-bottom: 10px;">
+                    <div style="display: flex; align-items: center; margin-bottom: 5px;">
+                        <span id="docPipelineStatus" style="margin-right: 10px;">⏳</span>
+                        <strong>Document Ingestion Pipeline:</strong>
+                        <span id="docPipelineState" style="margin-left: 10px;">Deploying...</span>
+                    </div>
+                </div>
+                <div id="deploymentProgress" style="background: #fef3c7; border-radius: 4px; height: 8px; overflow: hidden;">
+                    <div id="deploymentProgressBar" style="background: #f59e0b; height: 100%; width: 0%; transition: width 0.3s;"></div>
+                </div>
+                <p id="deploymentMessage" style="margin-top: 10px; font-size: 0.9rem; color: #92400e;">
+                    Initializing pipelines...
+                </p>
+            </div>
+            
+            <!-- Documents Table Viewer -->
+            <div id="documentsViewerContainer" style="display: none; margin-bottom: 20px; padding: 20px; background: #f0fdf4; border-radius: 8px; border-left: 4px solid #48bb78;">
+                <h3 style="margin-top: 0; color: #22543d;">✅ Deployment Complete - Select Target File</h3>
+                <p style="color: #666; margin-bottom: 15px; font-size: 0.95rem;">
+                    Select an Excel file from the documents table to configure as your target for CDC updates.
+                </p>
+                <div style="margin-bottom: 15px;">
+                    <strong>Document Table:</strong> <span id="documentsTableName">-</span><br>
+                    <strong>Total Documents:</strong> <span id="documentsCount">0</span>
+                </div>
+                <div style="max-height: 400px; overflow-y: auto; border: 1px solid #d1fae5; border-radius: 8px;">
+                    <table class="connections-table" id="documentsTable">
+                        <thead>
+                            <tr>
+                                <th style="width: 50px;">Select</th>
+                                <th>File Name</th>
+                                <th>Size</th>
+                                <th>Last Modified</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="documentsTableBody">
+                            <tr><td colspan="5" style="text-align: center; padding: 20px;">Loading documents...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div style="margin-top: 15px;">
+                    <button class="btn btn-primary" id="confirmFileSelectionBtn" onclick="confirmFileSelection()" disabled>
+                        Confirm Selection
+                    </button>
+                    <button class="btn btn-secondary" onclick="closeDocumentsViewer()" style="margin-left: 10px; background: #6b7280; color: white;">
+                        Close
+                    </button>
+                </div>
+            </div>
             
             <!-- Job List -->
             <div id="lakeflowJobList" class="config-list">
@@ -702,13 +693,13 @@
             });
             document.querySelector(`[data-connection-id="${connectionId}"]`)?.classList.add('selected');
             
-            // Show the Use Connection button
-            document.getElementById('useConnectionBtnContainer').style.display = 'block';
-            
             console.log('Selected connection:', selectedConnection);
             
             // Show confirmation message
-            showAlert(`Selected connection: ${connectionName}`, 'success');
+            showAlert(`Connection selected: ${connectionName} - Complete the job details below`, 'success');
+            
+            // Automatically expand the Lakeflow job form
+            showLakeflowJobForm();
         }
 
         // Function to get current selection (for later use)
@@ -854,27 +845,13 @@
         }
 
         // ============================================
-        // File Picker Modal Functions
-        // ============================================
-
-        function showFilePickerModal() {
-            if (!selectedConnection) {
-                showAlert('Please select a connection first', 'error');
-                return;
-            }
-            
-            document.getElementById('modalConnectionName').textContent = selectedConnection.name;
-            document.getElementById('filePickerModal').style.display = 'flex';
-        }
-
-        function closeFilePickerModal() {
-            document.getElementById('filePickerModal').style.display = 'none';
-            document.getElementById('filePickerForm').reset();
-        }
-
-        // ============================================
         // Lakeflow Job Management
         // ============================================
+
+        // Store current deployment tracking
+        let deploymentPollingInterval = null;
+        let currentDeploymentConnectionId = null;
+        let selectedDocumentFile = null;
 
         function showLakeflowJobForm() {
             if (!selectedConnection) {
@@ -884,23 +861,53 @@
             
             // Populate connection info
             document.getElementById('lfSelectedConnection').textContent = selectedConnection.name;
-            document.getElementById('lfSelectedSiteId').textContent = getConnectionSiteId(selectedConnection.id);
             
-            // Show form, hide button
+            // Show auto-generated table names
+            const docTableName = `${selectedConnection.name}_documents`;
+            const targetTableName = `${selectedConnection.name}_target`;
+            document.getElementById('lfDocTableName').textContent = docTableName;
+            document.getElementById('lfTargetTableName').textContent = targetTableName;
+            
+            // Hide instructions, show form
+            document.getElementById('lakeflowJobInstructions').style.display = 'none';
             document.getElementById('lakeflowJobFormContainer').style.display = 'block';
-            document.getElementById('createLakeflowJobBtn').style.display = 'none';
+            
+            // Smooth scroll to the Lakeflow Job card with some offset
+            setTimeout(() => {
+                const lakeflowCard = document.getElementById('lakeflowJobCard');
+                if (lakeflowCard) {
+                    lakeflowCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    // Add a subtle highlight animation
+                    lakeflowCard.style.transition = 'box-shadow 0.3s ease';
+                    lakeflowCard.style.boxShadow = '0 0 0 4px rgba(102, 126, 234, 0.3)';
+                    setTimeout(() => {
+                        lakeflowCard.style.boxShadow = '';
+                    }, 2000);
+                }
+            }, 100);
         }
 
         function cancelLakeflowJobForm() {
+            // Hide form, show instructions
             document.getElementById('lakeflowJobFormContainer').style.display = 'none';
-            document.getElementById('createLakeflowJobBtn').style.display = 'block';
+            document.getElementById('lakeflowJobInstructions').style.display = 'block';
             document.getElementById('lakeflowJobForm').reset();
             document.getElementById('lfDestCatalog').value = 'main';
+            document.getElementById('lfSiteId').value = '';
+            
+            // Clear the selected connection
+            selectedConnection = null;
+            document.querySelectorAll('.connection-row').forEach(row => {
+                row.classList.remove('selected');
+            });
+            document.querySelectorAll('input[name="selectedConnection"]').forEach(radio => {
+                radio.checked = false;
+            });
         }
 
         function getConnectionSiteId(connectionId) {
             const conn = allConnections.find(c => c.id === connectionId);
-            return conn ? conn.site_id : '-';
+            return conn ? (conn.site_id || '') : '';
         }
 
         async function loadLakeflowJobs() {
@@ -927,19 +934,21 @@
             jobList.innerHTML = jobs.map(job => `
                 <div class="config-item">
                     <div class="config-info">
-                        <div class="config-title">${job.name}</div>
+                        <div class="config-title">${job.connection_name}</div>
                         <div class="config-details">
                             🔗 ${job.connection_name} → 📊 ${job.destination_catalog}.${job.destination_schema}
                         </div>
                         <div style="font-size: 0.85rem; color: #888; margin-top: 5px;">
-                            Pipeline ID: ${job.pipeline_id || 'Pending'} | Job ID: ${job.job_id || 'Pending'}
-                        </div>
-                        <div style="font-size: 0.85rem; color: #666; margin-top: 3px;">
-                            ⏰ Runs every 15 minutes
+                            🌐 Site ID: ${job.source_schema || 'N/A'}<br>
+                            📄 Document Table: ${job.document_table || 'N/A'}<br>
+                            🔗 Pipeline ID: ${job.document_pipeline_id || 'N/A'}
                         </div>
                     </div>
                     <div class="config-actions">
-                        <button class="btn btn-danger" onclick="deleteLakeflowJob('${job.id}')">
+                        <button class="btn btn-primary" onclick="loadDocumentsTable('${job.connection_id}')" style="background: #4299e1;">
+                            View Documents
+                        </button>
+                        <button class="btn btn-danger" onclick="deleteLakeflowJob('${job.connection_id}')">
                             Delete
                         </button>
                     </div>
@@ -959,6 +968,179 @@
             } catch (error) {
                 showAlert('Failed to delete job: ' + error.message, 'error');
             }
+        }
+
+        async function startDeploymentTracking(connectionId, connectionName) {
+            // Show deployment status container
+            currentDeploymentConnectionId = connectionId;
+            document.getElementById('deployConnectionName').textContent = connectionName;
+            document.getElementById('deploymentStatusContainer').style.display = 'block';
+            document.getElementById('documentsViewerContainer').style.display = 'none';
+            
+            // Start polling for status
+            pollDeploymentStatus();
+            deploymentPollingInterval = setInterval(pollDeploymentStatus, 5000); // Poll every 5 seconds
+        }
+
+        async function pollDeploymentStatus() {
+            if (!currentDeploymentConnectionId) return;
+            
+            try {
+                const status = await apiCall(`/api/lakeflow/jobs/${currentDeploymentConnectionId}/status`);
+                
+                // Update document pipeline status
+                const docState = status.document_pipeline.state;
+                const docUpdate = status.document_pipeline.latest_update;
+                
+                if (docState === 'RUNNING' || (docUpdate && docUpdate.state === 'RUNNING')) {
+                    document.getElementById('docPipelineStatus').textContent = '🔄';
+                    document.getElementById('docPipelineState').textContent = 'Running...';
+                    document.getElementById('deploymentProgressBar').style.width = '50%';
+                    document.getElementById('deploymentMessage').textContent = 'Ingesting documents from SharePoint...';
+                } else if (docState === 'IDLE' || (docUpdate && docUpdate.state === 'COMPLETED')) {
+                    document.getElementById('docPipelineStatus').textContent = '✅';
+                    document.getElementById('docPipelineState').textContent = 'Completed';
+                    document.getElementById('deploymentProgressBar').style.width = '100%';
+                    document.getElementById('deploymentMessage').textContent = 'Document ingestion complete!';
+                    
+                    // Stop polling and load documents
+                    if (deploymentPollingInterval) {
+                        clearInterval(deploymentPollingInterval);
+                        deploymentPollingInterval = null;
+                    }
+                    
+                    // Hide deployment status and show documents viewer
+                    setTimeout(() => {
+                        document.getElementById('deploymentStatusContainer').style.display = 'none';
+                        loadDocumentsTable(currentDeploymentConnectionId);
+                    }, 2000);
+                } else if (docUpdate && docUpdate.state === 'FAILED') {
+                    document.getElementById('docPipelineStatus').textContent = '❌';
+                    document.getElementById('docPipelineState').textContent = 'Failed';
+                    document.getElementById('deploymentMessage').textContent = 'Pipeline failed. Please check Databricks for details.';
+                    if (deploymentPollingInterval) {
+                        clearInterval(deploymentPollingInterval);
+                        deploymentPollingInterval = null;
+                    }
+                } else {
+                    document.getElementById('docPipelineStatus').textContent = '⏳';
+                    document.getElementById('docPipelineState').textContent = 'Initializing...';
+                    document.getElementById('deploymentProgressBar').style.width = '25%';
+                }
+                
+            } catch (error) {
+                console.error('Failed to poll deployment status:', error);
+                document.getElementById('deploymentMessage').textContent = 'Error checking status: ' + error.message;
+            }
+        }
+
+        async function loadDocumentsTable(connectionId) {
+            try:
+                document.getElementById('documentsViewerContainer').style.display = 'block';
+                document.getElementById('documentsTableBody').innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 20px;">Loading documents...</td></tr>';
+                
+                const result = await apiCall(`/api/lakeflow/jobs/${connectionId}/documents`);
+                
+                document.getElementById('documentsTableName').textContent = result.table;
+                document.getElementById('documentsCount').textContent = result.count;
+                
+                if (!result.documents || result.documents.length === 0) {
+                    document.getElementById('documentsTableBody').innerHTML = `
+                        <tr><td colspan="5" style="text-align: center; padding: 20px; color: #666;">
+                            ${result.message || 'No documents found yet. Files may still be ingesting.'}
+                        </td></tr>
+                    `;
+                    return;
+                }
+                
+                // Render documents table
+                const tbody = document.getElementById('documentsTableBody');
+                tbody.innerHTML = result.documents.map(doc => {
+                    const fileName = doc.name || doc.path.split('/').pop();
+                    const fileSize = formatFileSize(doc.size);
+                    const modTime = doc.modification_time ? new Date(doc.modification_time).toLocaleString() : 'N/A';
+                    const isExcel = fileName.toLowerCase().endsWith('.xlsx') || fileName.toLowerCase().endsWith('.xls');
+                    
+                    return `
+                        <tr class="document-row" data-file-path="${doc.path}">
+                            <td class="select-cell">
+                                <input 
+                                    type="radio" 
+                                    name="selectedDocument" 
+                                    value="${doc.path}"
+                                    onchange="selectDocument('${doc.path}', '${fileName}')"
+                                />
+                            </td>
+                            <td><strong>${fileName}</strong></td>
+                            <td>${fileSize}</td>
+                            <td>${modTime}</td>
+                            <td>
+                                ${isExcel ? `
+                                    <button 
+                                        class="btn btn-sm btn-primary" 
+                                        onclick="event.stopPropagation(); showExcelPreview('${connectionId}', '${doc.path}')"
+                                        style="padding: 5px 10px; font-size: 0.85rem; background: #4299e1;">
+                                        📊 Parse Excel
+                                    </button>
+                                ` : ''}
+                            </td>
+                        </tr>
+                    `;
+                }).join('');
+                
+                // Scroll to documents viewer
+                setTimeout(() => {
+                    document.getElementById('documentsViewerContainer').scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }, 300);
+                
+            } catch (error) {
+                console.error('Failed to load documents:', error);
+                showAlert('Failed to load documents: ' + error.message, 'error');
+                document.getElementById('documentsTableBody').innerHTML = `
+                    <tr><td colspan="5" style="text-align: center; padding: 20px; color: #e53e3e;">
+                        Error loading documents: ${error.message}
+                    </td></tr>
+                `;
+            }
+        }
+
+        function selectDocument(filePath, fileName) {
+            selectedDocumentFile = { path: filePath, name: fileName };
+            document.getElementById('confirmFileSelectionBtn').disabled = false;
+            console.log('Selected document:', selectedDocumentFile);
+        }
+
+        function confirmFileSelection() {
+            if (!selectedDocumentFile) {
+                showAlert('Please select a file first', 'error');
+                return;
+            }
+            
+            showAlert(`File selected: ${selectedDocumentFile.name}. You can now configure CDC for this file.`, 'success');
+            closeDocumentsViewer();
+            
+            // TODO: Navigate to next step or trigger CDC configuration
+            console.log('Confirmed file:', selectedDocumentFile);
+        }
+
+        function closeDocumentsViewer() {
+            document.getElementById('documentsViewerContainer').style.display = 'none';
+            selectedDocumentFile = null;
+            document.getElementById('confirmFileSelectionBtn').disabled = true;
+            document.querySelectorAll('input[name="selectedDocument"]').forEach(radio => {
+                radio.checked = false;
+            });
+            
+            // Reload the jobs list
+            loadLakeflowJobs();
+        }
+
+        function formatFileSize(bytes) {
+            if (!bytes || bytes === 0) return '0 B';
+            const k = 1024;
+            const sizes = ['B', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
         }
 
         // Commented out - no longer used in table view
@@ -1357,53 +1539,6 @@
             loadLakeflowJobs();
             // Search filter setup moved to loadSharePointConnections()
             
-            // Handle file picker form submission
-            const filePickerForm = document.getElementById('filePickerForm');
-            if (filePickerForm) {
-                filePickerForm.addEventListener('submit', async function(e) {
-                    e.preventDefault();
-                    
-                    const fileUrl = document.getElementById('sharePointFileUrl').value;
-                    const sheetName = document.getElementById('excelSheetName').value;
-                    const dataRange = document.getElementById('excelDataRange').value;
-                    
-                    // Build the dataAddress option if sheet and/or range provided
-                    let dataAddress = '';
-                    if (sheetName && dataRange) {
-                        dataAddress = `'${sheetName}'!${dataRange}`;
-                    } else if (sheetName) {
-                        dataAddress = `'${sheetName}'`;
-                    }
-                    
-                    // Store the file selection for use in pipeline creation
-                    window.selectedSharePointFile = {
-                        connection: selectedConnection,
-                        url: fileUrl,
-                        sheetName: sheetName,
-                        dataRange: dataRange,
-                        dataAddress: dataAddress
-                    };
-                    
-                    console.log('Selected file:', window.selectedSharePointFile);
-                    
-                    // Close modal and show success
-                    closeFilePickerModal();
-                    showAlert(`File selected: ${fileUrl.split('/').pop()}`, 'success');
-                    
-                    // Auto-select connection in pipeline form
-                    const connectionSelect = document.getElementById('spConnectionSelect');
-                    if (connectionSelect) {
-                        connectionSelect.value = selectedConnection.id;
-                    }
-                    
-                    // Scroll to the pipeline section
-                    const pipelineSection = document.querySelector('h2');
-                    if (pipelineSection) {
-                        pipelineSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                    }
-                });
-            }
-            
             // Handle Lakeflow job form submission
             const lakeflowJobForm = document.getElementById('lakeflowJobForm');
             if (lakeflowJobForm) {
@@ -1419,23 +1554,25 @@
                     
                     try {
                         const jobData = {
-                            id: document.getElementById('lfJobId').value,
-                            name: document.getElementById('lfJobName').value,
                             connection_id: selectedConnection.id,
                             connection_name: selectedConnection.name,
-                            source_schema: getConnectionSiteId(selectedConnection.id),
+                            source_schema: document.getElementById('lfSiteId').value.trim(),
                             destination_catalog: document.getElementById('lfDestCatalog').value,
                             destination_schema: document.getElementById('lfDestSchema').value,
                         };
                         
-                        await apiCall('/api/lakeflow/jobs', {
+                        const result = await apiCall('/api/lakeflow/jobs', {
                             method: 'POST',
                             body: JSON.stringify(jobData),
                         });
                         
-                        showAlert('Lakeflow job created successfully!', 'success');
+                        showAlert('Lakeflow job created! Pipelines are being deployed...', 'success');
                         cancelLakeflowJobForm();
                         await loadLakeflowJobs();
+                        
+                        // Start deployment tracking
+                        startDeploymentTracking(result.connection_id, selectedConnection.name);
+                        
                     } catch (error) {
                         showAlert('Failed to create job: ' + error.message, 'error');
                     } finally {
@@ -1444,6 +1581,227 @@
                 });
             }
         });
+
+        // ========== Excel Preview and Parsing Functions ==========
+        
+        let currentExcelPreview = null;
+
+        async function showExcelPreview(connectionId, filePath) {
+            const modal = document.getElementById('excelPreviewModal');
+            const loading = document.getElementById('previewLoading');
+            const content = document.getElementById('previewContent');
+            
+            modal.style.display = 'flex';
+            loading.style.display = 'block';
+            content.style.display = 'none';
+            
+            try {
+                // Fetch preview
+                const response = await fetch(
+                    `/api/excel/preview?connection_id=${encodeURIComponent(connectionId)}&file_path=${encodeURIComponent(filePath)}`
+                );
+                
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.detail || 'Failed to preview Excel');
+                }
+                
+                const preview = await response.json();
+                currentExcelPreview = { ...preview, connectionId };
+                
+                // Display preview
+                loading.style.display = 'none';
+                content.style.display = 'block';
+                
+                renderExcelPreview(preview);
+            } catch (error) {
+                console.error('Failed to preview Excel:', error);
+                showAlert('Failed to preview Excel: ' + error.message, 'error');
+                modal.style.display = 'none';
+            }
+        }
+
+        function renderExcelPreview(preview) {
+            const html = `
+                <h3 style="margin-top: 0; color: #2d3748; border-bottom: 2px solid #4299e1; padding-bottom: 10px;">
+                    📊 Excel Preview
+                </h3>
+                
+                <div style="background: #f7fafc; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+                    <p style="margin: 0; color: #4a5568;"><strong>File:</strong> ${preview.file_path.split('/').pop()}</p>
+                    <p style="margin: 5px 0 0 0; color: #4a5568;"><strong>Sheet:</strong> ${preview.selected_sheet}</p>
+                </div>
+                
+                <div class="preview-section">
+                    <h4 style="color: #2d3748; margin-top: 0;">Auto-Detected Schema</h4>
+                    <div style="max-height: 200px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 6px;">
+                        <table style="width: 100%; border-collapse: collapse;">
+                            <thead style="position: sticky; top: 0; background: #edf2f7;">
+                                <tr>
+                                    <th style="padding: 8px; text-align: left; border-bottom: 2px solid #cbd5e0;">Column</th>
+                                    <th style="padding: 8px; text-align: left; border-bottom: 2px solid #cbd5e0;">Type</th>
+                                    <th style="padding: 8px; text-align: left; border-bottom: 2px solid #cbd5e0;">Nullable</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${preview.columns.map(col => `
+                                    <tr>
+                                        <td style="padding: 8px; border-bottom: 1px solid #e2e8f0;"><code>${col.name}</code></td>
+                                        <td style="padding: 8px; border-bottom: 1px solid #e2e8f0;"><span style="background: #bee3f8; padding: 2px 6px; border-radius: 4px; font-size: 0.85em;">${col.type}</span></td>
+                                        <td style="padding: 8px; border-bottom: 1px solid #e2e8f0;">${col.nullable ? '✓' : '✗'}</td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                
+                <div class="preview-section" style="margin-top: 20px;">
+                    <h4 style="color: #2d3748; margin-top: 0;">Sample Data (first ${preview.sample_rows.length} rows)</h4>
+                    <div style="max-height: 250px; overflow: auto; border: 1px solid #e2e8f0; border-radius: 6px;">
+                        <table style="width: 100%; border-collapse: collapse; font-size: 0.9em;">
+                            <thead style="position: sticky; top: 0; background: #edf2f7;">
+                                <tr>${preview.columns.map(c => `<th style="padding: 8px; text-align: left; border-bottom: 2px solid #cbd5e0;">${c.name}</th>`).join('')}</tr>
+                            </thead>
+                            <tbody>
+                                ${preview.sample_rows.map(row => `
+                                    <tr>${preview.columns.map(c => `<td style="padding: 8px; border-bottom: 1px solid #e2e8f0;">${row[c.name] !== null && row[c.name] !== undefined ? row[c.name] : '<span style="color: #a0aec0;">NULL</span>'}</td>`).join('')}</tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                
+                <div style="margin-top: 25px; padding-top: 20px; border-top: 1px solid #e2e8f0;">
+                    <label style="display: block; margin-bottom: 10px; font-weight: 600; color: #2d3748;">
+                        Target Delta Table Name:
+                    </label>
+                    <input 
+                        type="text" 
+                        id="parseTableName" 
+                        value="${preview.recommended_table_name}"
+                        style="width: 100%; padding: 10px; border: 1px solid #cbd5e0; border-radius: 6px; font-size: 1rem; margin-bottom: 15px;"
+                    >
+                    
+                    <div style="display: flex; gap: 10px; justify-content: flex-end;">
+                        <button 
+                            class="btn"
+                            onclick="closeExcelPreview()" 
+                            style="padding: 10px 20px; background: #e2e8f0; color: #2d3748; border: none; border-radius: 6px; cursor: pointer;">
+                            Cancel
+                        </button>
+                        <button 
+                            class="btn btn-primary"
+                            onclick="confirmParse()" 
+                            style="padding: 10px 20px; background: #4299e1; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">
+                            Parse to Delta Table
+                        </button>
+                    </div>
+                </div>
+            `;
+            
+            document.getElementById('previewContent').innerHTML = html;
+        }
+
+        async function confirmParse() {
+            const tableName = document.getElementById('parseTableName').value.trim();
+            
+            if (!tableName) {
+                showAlert('Please enter a table name', 'error');
+                return;
+            }
+            
+            if (!currentExcelPreview) {
+                showAlert('No preview data available', 'error');
+                return;
+            }
+            
+            // Show loading state
+            const parseBtn = event.target;
+            const originalText = parseBtn.textContent;
+            parseBtn.textContent = 'Parsing...';
+            parseBtn.disabled = true;
+            
+            try {
+                const response = await fetch('/api/excel/parse', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        connection_id: currentExcelPreview.connectionId,
+                        file_path: currentExcelPreview.file_path,
+                        table_name: tableName,
+                        sheet_name: currentExcelPreview.selected_sheet
+                    })
+                });
+                
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.detail || 'Failed to parse Excel');
+                }
+                
+                const result = await response.json();
+                
+                showAlert(
+                    `Success! Created table: ${result.table_name}\nRows inserted: ${result.rows_inserted} of ${result.total_rows}`,
+                    'success'
+                );
+                
+                closeExcelPreview();
+                
+                // Optionally refresh documents table or show success state
+                console.log('Parse result:', result);
+                
+            } catch (error) {
+                console.error('Failed to parse Excel:', error);
+                showAlert('Failed to parse Excel: ' + error.message, 'error');
+                parseBtn.textContent = originalText;
+                parseBtn.disabled = false;
+            }
+        }
+
+        function closeExcelPreview() {
+            document.getElementById('excelPreviewModal').style.display = 'none';
+            currentExcelPreview = null;
+        }
     </script>
+    
+    <!-- Excel Preview Modal -->
+    <div id="excelPreviewModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 10000; align-items: center; justify-content: center;">
+        <div style="background: white; border-radius: 12px; max-width: 900px; width: 90%; max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.3); position: relative; padding: 30px;">
+            <button 
+                onclick="closeExcelPreview()" 
+                style="position: absolute; top: 15px; right: 15px; background: none; border: none; font-size: 28px; color: #a0aec0; cursor: pointer; line-height: 1; padding: 0; width: 30px; height: 30px;"
+                title="Close">
+                ×
+            </button>
+            
+            <div id="previewLoading" style="text-align: center; padding: 40px;">
+                <div class="spinner" style="border: 4px solid #f3f3f3; border-top: 4px solid #4299e1; border-radius: 50%; width: 50px; height: 50px; animation: spin 1s linear infinite; margin: 0 auto 20px;"></div>
+                <p style="color: #666; font-size: 1.1rem;">Loading Excel preview...</p>
+            </div>
+            
+            <div id="previewContent" style="display: none;">
+                <!-- Content will be rendered here -->
+            </div>
+        </div>
+    </div>
+    
+    <style>
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .preview-section h4 {
+            margin-bottom: 12px;
+            font-size: 1.1rem;
+        }
+        
+        .btn-sm {
+            font-size: 0.875rem !important;
+            padding: 6px 12px !important;
+        }
+    </style>
+
 </body>
 </html>

@@ -42,15 +42,13 @@ class SharePointPipelineConfig(BaseModel):
 
 
 class LakeflowJobConfig(BaseModel):
-    id: str
-    name: str
-    connection_id: str  # Reference to SharePoint connection
+    connection_id: str  # Reference to SharePoint connection (PRIMARY KEY)
     connection_name: str  # Unity Catalog connection name (e.g., "sharepoint-fe")
     source_schema: str  # SharePoint site ID (UUID)
     destination_catalog: str  # Unity Catalog (e.g., "main")
     destination_schema: str  # Schema where tables will land
-    pipeline_id: Optional[str] = None  # Databricks pipeline ID after creation
-    job_id: Optional[str] = None  # Databricks job ID (scheduled run)
+    document_pipeline_id: Optional[str] = None  # Document ingestion pipeline
+    document_table: Optional[str] = None  # Full path: {catalog}.{schema}.documents
     created_at: Optional[str] = None
 
 
