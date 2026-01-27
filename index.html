@@ -789,11 +789,12 @@
             const term = searchTerm.toLowerCase();
             const filtered = allConnections.filter(conn => {
                 return (
-                    conn.name.toLowerCase().includes(term) ||
-                    conn.id.toLowerCase().includes(term) ||
-                    conn.site_id.toLowerCase().includes(term) ||
-                    conn.connection_name.toLowerCase().includes(term) ||
-                    conn.tenant_id.toLowerCase().includes(term)
+                    (conn.name && conn.name.toLowerCase().includes(term)) ||
+                    (conn.id && conn.id.toLowerCase().includes(term)) ||
+                    (conn.site_id && conn.site_id.toLowerCase().includes(term)) ||
+                    (conn.connection_name && conn.connection_name.toLowerCase().includes(term)) ||
+                    (conn.tenant_id && conn.tenant_id.toLowerCase().includes(term)) ||
+                    (conn.comment && conn.comment.toLowerCase().includes(term))
                 );
             });
             

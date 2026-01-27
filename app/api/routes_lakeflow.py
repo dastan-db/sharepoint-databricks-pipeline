@@ -6,7 +6,7 @@ from app.services.unity_catalog import UnityCatalog
 from app.services.excel_sync_notebook import ExcelSyncNotebook
 from databricks.sdk import WorkspaceClient
 from databricks.sdk.service.pipelines import IngestionConfig, IngestionPipelineDefinition, IngestionSourceType, SchemaSpec
-from databricks.sdk.service.jobs import Task, PipelineTask, NotebookTask, TaskDependency, Source
+from databricks.sdk.service.jobs import Task, PipelineTask, NotebookTask, TaskDependency, Source, TableUpdateTriggerConfiguration, TriggerSettings
 from databricks.sdk.service.workspace import ImportFormat, Language
 import os
 from datetime import datetime
@@ -204,7 +204,13 @@ dbutils.notebook.exit("SYNC_NOT_CONFIGURED")
                     disable_auto_optimization=True
                 )
             ],
-            max_concurrent_runs=1
+            max_concurrent_runs=1,
+            trigger=TriggerSettings(
+                table_update=[TableUpdateTriggerConfiguration(
+                    table_names=[config.document_table],
+                    wait_after_last_change_seconds=60  # Wait 60s after last change to batch updates
+                )]
+            )
         )
         config.job_id = str(job.job_id)
         

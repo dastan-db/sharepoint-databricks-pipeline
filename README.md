@@ -355,6 +355,8 @@ UnityCatalog.query(
 -   **File Filtering**: Pattern-based filtering (e.g., *.xlsx) to ingest only Excel files
 -   **Lakebase Destination**: All pipelines write to Lakebase documents table for staging
 -   **Pipeline Monitoring**: View pipeline status and trigger manual runs
+-   **Event-Driven CDC**: Automatic table update triggers that run sync jobs when documents are ingested (60s debounce)
+-   **Change Data Capture**: Only syncs Excel files when they've been modified, with watermark tracking
 
 ### Section 3: Excel Streaming Configurations
 -   **Continuous Streaming**: Real-time data processing from Lakebase to Delta tables
@@ -443,6 +445,19 @@ No manual connection setup needed if connections already exist in Unity Catalog!
 -   `DELETE /sharepoint/pipelines/{id}` - Delete a pipeline
 -   `POST /sharepoint/pipelines/{id}/run` - Trigger a pipeline run
 -   `GET /sharepoint/pipelines/{id}/status` - Get pipeline status and run details
+
+### Lakeflow Jobs (Excel Sync with CDC)
+
+-   `GET /lakeflow/jobs` - List all Lakeflow sync jobs
+-   `POST /lakeflow/jobs` - Create a new sync job with automatic table update trigger
+-   `GET /lakeflow/jobs/{connection_id}/status` - Get job status
+-   `GET /lakeflow/jobs/{connection_id}/documents` - Query documents table
+-   `POST /lakeflow/jobs/{connection_id}/configure-sync` - Configure Excel-to-Delta sync with CDC
+-   `POST /lakeflow/jobs/{connection_id}/run-sync` - Manually trigger sync job
+-   `DELETE /lakeflow/jobs/{connection_id}/disable-sync` - Disable auto-sync
+-   `DELETE /lakeflow/jobs/{connection_id}` - Delete sync job
+
+**Key Feature**: Jobs automatically trigger when the documents table is updated (60s debounce), implementing event-driven CDC pattern.
 
 ### Excel Streaming Configurations
 
@@ -536,22 +551,38 @@ CREATE TABLE IF NOT EXISTS excel_stream_configs (
 3. Click **Create Connection**
 4. Test the connection to verify credentials
 
-### Step 2: Create Lakeflow Pipeline
+### Step 2: Create Lakeflow Job
 
-1. Navigate to the **Lakeflow Pipelines** section
+1. Navigate to the **Lakeflow Jobs** section
 2. Select your SharePoint connection from the dropdown
-3. Choose ingestion type:
-   - **All Drives**: Ingest all document libraries from the site
-   - **Specific Drives**: Enter comma-separated drive names
-4. Configure destination:
-   - Lakebase Table (default: `documents`)
-   - File Pattern (default: `*.xlsx`)
-5. Click **Create Pipeline**
-6. Trigger a manual run to start ingestion
+3. Configure the job:
+   - SharePoint Site ID
+   - Destination catalog and schema
+4. Click **Create Job**
+5. The system creates:
+   - A Lakeflow ingestion pipeline for SharePoint documents
+   - A Databricks Job with automatic table update trigger
+   - A sync task for Excel-to-Delta CDC processing
 
-The pipeline will ingest Excel files from SharePoint into your Lakebase documents table.
+**Automatic Trigger**: The job automatically runs when the documents table is updated, with a 60-second debounce to batch multiple changes.
 
-### Step 3: Create Excel Streaming Configuration
+The pipeline will ingest Excel files from SharePoint into your documents table, and trigger sync jobs when changes are detected.
+
+### Step 3: Configure Excel Sync (Optional)
+
+If you want to sync a specific Excel file to a Delta table with CDC:
+
+1. After documents are ingested, view the documents table
+2. Select the Excel file you want to sync
+3. Click **Configure Sync** and specify:
+   - Target table name
+   - Header row (which row contains column names)
+   - Columns to include (optional - leave empty for all columns)
+4. Click **Save Configuration**
+
+The sync notebook will be generated and uploaded to Databricks. When the documents table updates (detected via the automatic table update trigger), the job runs and syncs only if the tracked Excel file was modified (CDC pattern with watermark tracking).
+
+### Step 4: Create Excel Streaming Configuration (Alternative)
 
 1. Navigate to the **Excel Streaming Configurations** section
 2. Configure the stream:
@@ -567,9 +598,12 @@ The stream will continuously monitor Lakebase and process new Excel files into D
 
 ### Monitoring
 
+- **Job Status**: Check Lakeflow job runs (automatically triggered when documents table updates)
 - **Pipeline Status**: Check Lakeflow pipeline runs and ingestion status
+- **Sync Status**: View Excel sync task runs and CDC watermarks
 - **Stream Status**: View active streams, check if streaming is running
-- **Data Validation**: Verify data is flowing through all three stages
+- **Data Validation**: Verify data is flowing through all stages
+- **Automatic Triggers**: Monitor table update triggers to ensure jobs run when expected
 
 ## SharePoint OAuth U2M Setup
 
