@@ -745,35 +745,10 @@
                 
                 renderSharePointConnections(connections);
                 populateConnectionDropdown(connections);
-                
-                // Setup search filter after connections are loaded
-                setupSearchFilter();
             } catch (error) {
                 console.error('Failed to load SharePoint connections:', error);
                 showAlert('Failed to load SharePoint connections: ' + error.message, 'error');
             }
-        }
-        
-        function setupSearchFilter() {
-            const searchInput = document.getElementById('connectionSearchInput');
-            console.log('Setting up search filter, input element:', searchInput);
-            if (searchInput) {
-                // Explicitly clear any cached value from browser
-                searchInput.value = '';
-                
-                // Remove existing listener if any
-                searchInput.removeEventListener('input', handleSearchInput);
-                // Add new listener
-                searchInput.addEventListener('input', handleSearchInput);
-                console.log('Search event listener attached successfully');
-            } else {
-                console.error('Search input element not found!');
-            }
-        }
-        
-        function handleSearchInput(e) {
-            console.log('Search input changed:', e.target.value);
-            filterConnections(e.target.value);
         }
 
         function filterConnections(searchTerm) {
@@ -1027,6 +1002,17 @@
             }
             
             try {
+                // Stop polling if we're deleting the job that's currently being tracked
+                if (currentDeploymentConnectionId === jobId) {
+                    if (deploymentPollingInterval) {
+                        clearInterval(deploymentPollingInterval);
+                        deploymentPollingInterval = null;
+                    }
+                    currentDeploymentConnectionId = null;
+                    document.getElementById('deploymentStatusContainer').style.display = 'none';
+                    document.getElementById('documentsViewerContainer').style.display = 'none';
+                }
+                
                 await apiCall(`/api/lakeflow/jobs/${jobId}`, { method: 'DELETE' });
                 showAlert('Lakeflow job deleted successfully!', 'success');
                 await loadLakeflowJobs();
@@ -1096,6 +1082,17 @@
             } catch (error) {
                 console.error('Failed to poll deployment status:', error);
                 document.getElementById('deploymentMessage').textContent = 'Error checking status: ' + error.message;
+                
+                // Stop polling if job not found (404) or other persistent errors
+                if (error.message.includes('not found') || error.message.includes('404')) {
+                    if (deploymentPollingInterval) {
+                        clearInterval(deploymentPollingInterval);
+                        deploymentPollingInterval = null;
+                        currentDeploymentConnectionId = null;
+                    }
+                    document.getElementById('deploymentStatusContainer').style.display = 'none';
+                    showAlert('Job was removed or not found. Status polling stopped.', 'info');
+                }
             }
         }
 
@@ -1290,7 +1287,16 @@
         document.addEventListener('DOMContentLoaded', () => {
             loadSharePointConnections();
             loadLakeflowJobs();
-            // Search filter setup moved to loadSharePointConnections()
+            
+            // Setup search filter on page load
+            const searchInput = document.getElementById('connectionSearchInput');
+            if (searchInput) {
+                searchInput.addEventListener('input', (e) => {
+                    console.log('Search input changed:', e.target.value);
+                    filterConnections(e.target.value);
+                });
+                console.log('Search filter attached on page load');
+            }
             
             // Handle Lakeflow job form submission
             const lakeflowJobForm = document.getElementById('lakeflowJobForm');
@@ -1319,7 +1325,7 @@
                             body: JSON.stringify(jobData),
                         });
                         
-                        showAlert('Lakeflow job created! Pipelines are being deployed...', 'success');
+                        showAlert('Lakeflow job created and started successfully!', 'success');
                         
                         // Save connection name BEFORE clearing the form (which nulls selectedConnection)
                         const connectionNameForTracking = selectedConnection.name;

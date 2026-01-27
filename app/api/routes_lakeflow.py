@@ -182,6 +182,8 @@ dbutils.notebook.exit("SYNC_NOT_CONFIGURED")
         except Exception as placeholder_err:
             print(f"Warning: Could not create placeholder notebook: {placeholder_err}")
         
+        # Create job WITHOUT table update trigger initially (table doesn't exist yet)
+        # The trigger will be added automatically after first successful run creates the table
         job = w.jobs.create(
             name=f"{config.connection_name}_sync_job_{unique_id}",
             tasks=[
@@ -204,13 +206,8 @@ dbutils.notebook.exit("SYNC_NOT_CONFIGURED")
                     disable_auto_optimization=True
                 )
             ],
-            max_concurrent_runs=1,
-            trigger=TriggerSettings(
-                table_update=[TableUpdateTriggerConfiguration(
-                    table_names=[config.document_table],
-                    wait_after_last_change_seconds=60  # Wait 60s after last change to batch updates
-                )]
-            )
+            max_concurrent_runs=1
+            # NOTE: No trigger initially - table doesn't exist yet
         )
         config.job_id = str(job.job_id)
         
@@ -241,13 +238,23 @@ dbutils.notebook.exit("SYNC_NOT_CONFIGURED")
         # Start the document pipeline update to begin ingestion
         doc_update = w.pipelines.start_update(pipeline_id=config.document_pipeline_id)
         
+        # CRITICAL: Trigger the Databricks Job to run (not just the pipeline)
+        # This ensures both the ingestion and sync tasks execute immediately
+        try:
+            job_run = w.jobs.run_now(job_id=int(config.job_id))
+            job_run_id = job_run.run_id
+        except Exception as job_trigger_err:
+            print(f"Warning: Could not trigger job run: {job_trigger_err}")
+            job_run_id = None
+        
         result = {
             "message": "Lakeflow job created successfully",
             "connection_id": config.connection_id,
             "document_pipeline_id": config.document_pipeline_id,
             "document_table": config.document_table,
             "document_update_id": doc_update.update_id,
-            "job_id": config.job_id
+            "job_id": config.job_id,
+            "job_run_id": job_run_id
         }
         return result
     except HTTPException:
