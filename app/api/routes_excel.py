@@ -6,6 +6,7 @@ import pandas as pd
 import io
 import os
 import re
+from datetime import datetime
 from typing import Optional, List, Dict, Any
 from pydantic import BaseModel
 
@@ -17,6 +18,8 @@ class ParseExcelRequest(BaseModel):
     file_path: str
     table_name: str
     sheet_name: Optional[str] = None
+    header_row: int = 0  # Which row contains headers (0-indexed)
+    selected_columns: Optional[List[str]] = None  # Only include these columns
     schema: Optional[List[Dict[str, str]]] = None
 
 
@@ -56,16 +59,18 @@ def _generate_table_name(file_path: str) -> str:
 @router.get("/preview")
 async def preview_excel_file(
     connection_id: str,
-    file_path: str
+    file_path: str,
+    max_rows: int = 100
 ):
     """
-    Read Excel file from documents table and auto-detect schema.
+    Read Excel file from documents table and return raw data for interactive column selection.
     
     Returns:
     - sheets: List of sheet names
-    - columns: Detected columns with inferred types
-    - sample_rows: First 5 rows as preview
-    - recommended_schema: Suggested Delta table schema
+    - raw_data: All rows as lists (no headers assumed)
+    - total_rows: Number of rows in preview
+    - column_count: Number of columns
+    - recommended_table_name: Suggested table name
     """
     try:
         # 1. Get document table name from lakeflow_jobs
@@ -105,40 +110,32 @@ async def preview_excel_file(
             file_content = base64.b64decode(file_content)
         
         # 3. Parse Excel with pandas
-        excel_file = pd.ExcelFile(io.BytesIO(file_content))
+        excel_file = pd.ExcelFile(io.BytesIO(file_content), engine='openpyxl')
         sheets = excel_file.sheet_names
         
-        # Read first sheet for preview (limited rows)
-        df = pd.read_excel(excel_file, sheet_name=sheets[0], nrows=5)
+        # Read WITHOUT headers first (header=None) for raw display
+        df = pd.read_excel(excel_file, sheet_name=sheets[0], header=None, nrows=max_rows)
         
-        # 4. Auto-detect schema
-        detected_columns = []
-        for col in df.columns:
-            dtype = df[col].dtype
-            spark_type = _pandas_to_spark_type(dtype)
-            detected_columns.append({
-                "name": str(col),
-                "type": spark_type,
-                "nullable": bool(df[col].isnull().any())
-            })
-        
-        # 5. Sample rows
-        sample_rows = df.to_dict('records')
-        # Convert any non-serializable types
-        for row in sample_rows:
-            for key, value in row.items():
+        # Convert to list of lists (raw data)
+        raw_data = []
+        for _, row in df.iterrows():
+            row_data = []
+            for value in row:
                 if pd.isna(value):
-                    row[key] = None
-                elif isinstance(value, (pd.Timestamp, pd.datetime)):
-                    row[key] = str(value)
+                    row_data.append(None)
+                elif isinstance(value, (pd.Timestamp, datetime)):
+                    row_data.append(str(value))
+                else:
+                    row_data.append(value)
+            raw_data.append(row_data)
         
         return {
             "file_path": file_path,
             "sheets": sheets,
             "selected_sheet": sheets[0],
-            "columns": detected_columns,
-            "sample_rows": sample_rows,
-            "row_count_preview": len(df),
+            "raw_data": raw_data,
+            "total_rows": len(df),
+            "column_count": len(df.columns) if len(df) > 0 else 0,
             "recommended_table_name": _generate_table_name(file_path)
         }
     
@@ -146,6 +143,103 @@ async def preview_excel_file(
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to preview Excel: {str(e)}")
+
+
+@router.get("/analyze-columns")
+async def analyze_columns_with_header(
+    connection_id: str,
+    file_path: str,
+    header_row: int = 0,
+    sheet_name: Optional[str] = None
+):
+    """
+    Analyze Excel columns with specified header row.
+    Returns column names, types, and sample data for interactive column selection.
+    
+    Parameters:
+    - connection_id: Lakeflow job connection ID
+    - file_path: Path to file in documents table
+    - header_row: Which row to use as headers (0-indexed)
+    - sheet_name: Optional sheet name (defaults to first sheet)
+    
+    Returns:
+    - columns: List of column metadata (name, type, nullable, sample_values)
+    - row_count: Total number of data rows (excluding header)
+    - header_row: Confirmed header row index
+    """
+    try:
+        # 1. Get document table name from lakeflow_jobs
+        jobs_table = _get_lakeflow_jobs_table()
+        query = f"""
+            SELECT document_table 
+            FROM {jobs_table} 
+            WHERE connection_id = '{connection_id}'
+        """
+        rows = UnityCatalog.query(query)
+        
+        if not rows:
+            raise HTTPException(status_code=404, detail="Job not found")
+        
+        doc_table = rows[0]['document_table']
+        
+        # 2. Read file content from documents table
+        file_query = f"""
+            SELECT content 
+            FROM {doc_table} 
+            WHERE file_id = '{file_path}' AND is_deleted = false
+            LIMIT 1
+        """
+        file_rows = UnityCatalog.query(file_query)
+        
+        if not file_rows:
+            raise HTTPException(status_code=404, detail=f"File not found: {file_path}")
+        
+        file_content = file_rows[0]['content']
+        
+        # Convert to bytes if needed
+        if isinstance(file_content, str):
+            import base64
+            file_content = base64.b64decode(file_content)
+        
+        # 3. Parse Excel with specified header row
+        df = pd.read_excel(
+            io.BytesIO(file_content),
+            sheet_name=sheet_name or 0,
+            header=header_row,
+            engine='openpyxl'
+        )
+        
+        # 4. Analyze columns
+        columns = []
+        for col in df.columns:
+            dtype = df[col].dtype
+            spark_type = _pandas_to_spark_type(dtype)
+            
+            # Get sample values (first 3 non-null values)
+            sample_values = []
+            for val in df[col].dropna().head(3):
+                if isinstance(val, (pd.Timestamp, datetime)):
+                    sample_values.append(str(val))
+                else:
+                    sample_values.append(val)
+            
+            columns.append({
+                "name": str(col),
+                "type": spark_type,
+                "nullable": bool(df[col].isnull().any()),
+                "sample_values": sample_values
+            })
+        
+        return {
+            "columns": columns,
+            "row_count": len(df),
+            "header_row": header_row
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to analyze columns: {str(e)}")
 
 
 @router.post("/parse")
@@ -195,15 +289,28 @@ async def parse_excel_to_delta(request: ParseExcelRequest):
             import base64
             file_content = base64.b64decode(file_content)
         
-        # Parse Excel
+        # Parse Excel with specified header row
         df = pd.read_excel(
             io.BytesIO(file_content),
-            sheet_name=request.sheet_name or 0
+            sheet_name=request.sheet_name or 0,
+            header=request.header_row,
+            engine='openpyxl'
         )
+        
+        # Filter to selected columns only
+        if request.selected_columns:
+            # Ensure selected columns exist in dataframe
+            available_cols = [col for col in request.selected_columns if col in df.columns]
+            if not available_cols:
+                raise HTTPException(
+                    status_code=400, 
+                    detail=f"None of the selected columns found in Excel file"
+                )
+            df = df[available_cols]
         
         # 3. Prepare schema
         if request.schema is None:
-            # Auto-detect schema
+            # Auto-detect schema from filtered dataframe
             schema = []
             for col in df.columns:
                 spark_type = _pandas_to_spark_type(df[col].dtype)
@@ -239,7 +346,7 @@ async def parse_excel_to_delta(request: ParseExcelRequest):
                     # Escape single quotes
                     escaped = value.replace("'", "''")
                     values.append(f"'{escaped}'")
-                elif isinstance(value, (pd.Timestamp, pd.datetime)):
+                elif isinstance(value, (pd.Timestamp, datetime)):
                     values.append(f"TIMESTAMP '{value}'")
                 else:
                     values.append(str(value))

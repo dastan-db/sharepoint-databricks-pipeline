@@ -303,6 +303,109 @@
             margin-bottom: 16px;
             opacity: 0.5;
         }
+
+        /* Excel Column Selection Styles */
+        .spreadsheet-container {
+            max-height: 400px;
+            overflow: auto;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            margin: 20px 0;
+            background: white;
+        }
+
+        .spreadsheet {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.85em;
+        }
+
+        .spreadsheet td {
+            border: 1px solid #e2e8f0;
+            padding: 6px 10px;
+            white-space: nowrap;
+        }
+
+        .row-number {
+            background: #f7fafc;
+            font-weight: bold;
+            text-align: center;
+            position: sticky;
+            left: 0;
+            border-right: 2px solid #cbd5e0;
+            min-width: 40px;
+        }
+
+        .data-row.header-row {
+            background: #4299e1;
+            color: white;
+            font-weight: bold;
+        }
+
+        .data-row.header-row .row-number {
+            background: #3182ce;
+            color: white;
+        }
+
+        .column-checkbox-item {
+            padding: 12px;
+            border: 1px solid #e2e8f0;
+            border-radius: 4px;
+            margin: 8px 0;
+            background: white;
+            transition: background-color 0.2s;
+        }
+
+        .column-checkbox-item:hover {
+            background: #f7fafc;
+        }
+
+        .column-checkbox-item input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+            vertical-align: middle;
+        }
+
+        .column-checkbox-item label {
+            cursor: pointer;
+            display: inline;
+            user-select: none;
+        }
+
+        .type-badge {
+            background: #bee3f8;
+            padding: 3px 8px;
+            border-radius: 3px;
+            font-size: 0.8em;
+            margin-left: 8px;
+            font-weight: 500;
+            color: #2c5282;
+        }
+
+        .sample-values {
+            color: #718096;
+            font-size: 0.85em;
+            margin-left: 8px;
+            font-style: italic;
+        }
+
+        .header-selector {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .header-selector label {
+            margin: 0;
+        }
+
+        .header-selector select {
+            padding: 8px;
+            border: 1px solid #cbd5e0;
+            border-radius: 4px;
+            font-size: 0.95em;
+        }
     </style>
 </head>
 <body>
@@ -1667,54 +1770,68 @@
         function renderExcelPreview(preview) {
             const html = `
                 <h3 style="margin-top: 0; color: #2d3748; border-bottom: 2px solid #4299e1; padding-bottom: 10px;">
-                    📊 Excel Preview
+                    📊 Excel Preview - Interactive Column Selection
                 </h3>
                 
                 <div style="background: #f7fafc; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
                     <p style="margin: 0; color: #4a5568;"><strong>File:</strong> ${preview.file_path.split('/').pop()}</p>
                     <p style="margin: 5px 0 0 0; color: #4a5568;"><strong>Sheet:</strong> ${preview.selected_sheet}</p>
+                    <p style="margin: 5px 0 0 0; color: #4a5568;"><strong>Total Rows:</strong> ${preview.total_rows} | <strong>Columns:</strong> ${preview.column_count}</p>
                 </div>
                 
-                <div class="preview-section">
-                    <h4 style="color: #2d3748; margin-top: 0;">Auto-Detected Schema</h4>
-                    <div style="max-height: 200px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 6px;">
-                        <table style="width: 100%; border-collapse: collapse;">
-                            <thead style="position: sticky; top: 0; background: #edf2f7;">
-                                <tr>
-                                    <th style="padding: 8px; text-align: left; border-bottom: 2px solid #cbd5e0;">Column</th>
-                                    <th style="padding: 8px; text-align: left; border-bottom: 2px solid #cbd5e0;">Type</th>
-                                    <th style="padding: 8px; text-align: left; border-bottom: 2px solid #cbd5e0;">Nullable</th>
+                <!-- Header Row Selector -->
+                <div class="header-selector" style="margin-bottom: 20px; padding: 15px; background: #fff3cd; border-radius: 6px; border-left: 4px solid #ffc107;">
+                    <label style="font-weight: 600; color: #856404; display: block; margin-bottom: 8px;">
+                        Step 1: Select Header Row (which row contains column names?)
+                    </label>
+                    <select id="headerRowSelect" style="padding: 8px; border: 1px solid #cbd5e0; border-radius: 4px; margin-right: 10px;">
+                        ${Array.from({length: Math.min(10, preview.total_rows)}, (_, i) => 
+                            `<option value="${i}">Row ${i + 1}</option>`
+                        ).join('')}
+                    </select>
+                    <button onclick="analyzeWithHeader()" class="btn btn-primary" style="padding: 8px 16px; background: #4299e1; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                        Detect Columns
+                    </button>
+                </div>
+                
+                <!-- Full Spreadsheet Display -->
+                <div class="spreadsheet-container">
+                    <table class="spreadsheet">
+                        <tbody id="spreadsheetBody">
+                            ${preview.raw_data.map((row, i) => `
+                                <tr class="data-row" data-row-index="${i}">
+                                    <td class="row-number">${i + 1}</td>
+                                    ${row.map(cell => `<td>${cell !== null && cell !== undefined ? cell : ''}</td>`).join('')}
                                 </tr>
-                            </thead>
-                            <tbody>
-                                ${preview.columns.map(col => `
-                                    <tr>
-                                        <td style="padding: 8px; border-bottom: 1px solid #e2e8f0;"><code>${col.name}</code></td>
-                                        <td style="padding: 8px; border-bottom: 1px solid #e2e8f0;"><span style="background: #bee3f8; padding: 2px 6px; border-radius: 4px; font-size: 0.85em;">${col.type}</span></td>
-                                        <td style="padding: 8px; border-bottom: 1px solid #e2e8f0;">${col.nullable ? '✓' : '✗'}</td>
-                                    </tr>
-                                `).join('')}
-                            </tbody>
-                        </table>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+                
+                <!-- Column Selection Panel (hidden initially) -->
+                <div id="columnSelectionPanel" style="display:none; margin-top: 20px;">
+                    <div style="background: #e7f3ff; padding: 15px; border-radius: 6px; border-left: 4px solid #4299e1; margin-bottom: 15px;">
+                        <h4 style="margin: 0 0 10px 0; color: #1e40af;">Step 2: Select Columns to Include</h4>
+                        <p style="margin: 0; color: #4a5568; font-size: 0.9em;">Choose which columns should be created in the Delta table</p>
+                    </div>
+                    <div class="column-actions" style="margin-bottom: 15px;">
+                        <button onclick="selectAllColumns()" class="btn" style="padding: 8px 16px; background: #48bb78; color: white; border: none; border-radius: 4px; cursor: pointer; margin-right: 8px;">
+                            Select All
+                        </button>
+                        <button onclick="deselectAllColumns()" class="btn" style="padding: 8px 16px; background: #f56565; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                            Deselect All
+                        </button>
+                    </div>
+                    <div id="columnCheckboxes"></div>
+                    
+                    <!-- Schema Preview -->
+                    <div class="schema-preview" style="margin-top: 20px; padding: 15px; background: #f0fdf4; border-radius: 6px; border-left: 4px solid #48bb78;">
+                        <h4 style="margin: 0 0 10px 0; color: #065f46;">Schema Preview</h4>
+                        <div id="schemaPreviewContent"></div>
                     </div>
                 </div>
                 
-                <div class="preview-section" style="margin-top: 20px;">
-                    <h4 style="color: #2d3748; margin-top: 0;">Sample Data (first ${preview.sample_rows.length} rows)</h4>
-                    <div style="max-height: 250px; overflow: auto; border: 1px solid #e2e8f0; border-radius: 6px;">
-                        <table style="width: 100%; border-collapse: collapse; font-size: 0.9em;">
-                            <thead style="position: sticky; top: 0; background: #edf2f7;">
-                                <tr>${preview.columns.map(c => `<th style="padding: 8px; text-align: left; border-bottom: 2px solid #cbd5e0;">${c.name}</th>`).join('')}</tr>
-                            </thead>
-                            <tbody>
-                                ${preview.sample_rows.map(row => `
-                                    <tr>${preview.columns.map(c => `<td style="padding: 8px; border-bottom: 1px solid #e2e8f0;">${row[c.name] !== null && row[c.name] !== undefined ? row[c.name] : '<span style="color: #a0aec0;">NULL</span>'}</td>`).join('')}</tr>
-                                `).join('')}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-                
+                <!-- Table Name Input -->
                 <div style="margin-top: 25px; padding-top: 20px; border-top: 1px solid #e2e8f0;">
                     <label style="display: block; margin-bottom: 10px; font-weight: 600; color: #2d3748;">
                         Target Delta Table Name:
@@ -1726,18 +1843,19 @@
                         style="width: 100%; padding: 10px; border: 1px solid #cbd5e0; border-radius: 6px; font-size: 1rem; margin-bottom: 15px;"
                     >
                     
+                    <!-- Action Buttons -->
                     <div style="display: flex; gap: 10px; justify-content: flex-end;">
                         <button 
-                            class="btn"
                             onclick="closeExcelPreview()" 
                             style="padding: 10px 20px; background: #e2e8f0; color: #2d3748; border: none; border-radius: 6px; cursor: pointer;">
                             Cancel
                         </button>
                         <button 
-                            class="btn btn-primary"
-                            onclick="confirmParse()" 
-                            style="padding: 10px 20px; background: #4299e1; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">
-                            Parse to Delta Table
+                            onclick="confirmParseWithSelection()" 
+                            id="confirmParseBtn"
+                            disabled
+                            style="padding: 10px 20px; background: #4299e1; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; opacity: 0.5;">
+                            Create Delta Table
                         </button>
                     </div>
                 </div>
@@ -1746,7 +1864,132 @@
             document.getElementById('previewContent').innerHTML = html;
         }
 
-        async function confirmParse() {
+        // Store detected columns for column selection
+        let detectedColumns = [];
+        
+        async function analyzeWithHeader() {
+            const headerRow = parseInt(document.getElementById('headerRowSelect').value);
+            
+            try {
+                const response = await fetch(
+                    `/api/excel/analyze-columns?connection_id=${currentExcelPreview.connectionId}&file_path=${encodeURIComponent(currentExcelPreview.file_path)}&header_row=${headerRow}&sheet_name=${currentExcelPreview.selected_sheet}`
+                );
+                
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.detail || 'Failed to analyze columns');
+                }
+                
+                const analysis = await response.json();
+                detectedColumns = analysis.columns;
+                
+                // Highlight header row in spreadsheet
+                document.querySelectorAll('.data-row').forEach(row => {
+                    row.classList.remove('header-row');
+                });
+                const headerRowEl = document.querySelector(`[data-row-index="${headerRow}"]`);
+                if (headerRowEl) {
+                    headerRowEl.classList.add('header-row');
+                }
+                
+                // Display column checkboxes
+                displayColumnCheckboxes(analysis.columns);
+                
+                showAlert(`Found ${analysis.columns.length} columns in row ${headerRow + 1}`, 'success');
+                
+            } catch (error) {
+                console.error('Failed to analyze columns:', error);
+                showAlert('Failed to analyze columns: ' + error.message, 'error');
+            }
+        }
+        
+        function displayColumnCheckboxes(columns) {
+            const container = document.getElementById('columnCheckboxes');
+            container.innerHTML = columns.map(col => `
+                <div class="column-checkbox-item">
+                    <input type="checkbox" 
+                           id="col_${col.name.replace(/[^a-zA-Z0-9]/g, '_')}" 
+                           value="${col.name}"
+                           checked
+                           onchange="updateSchemaPreview()">
+                    <label for="col_${col.name.replace(/[^a-zA-Z0-9]/g, '_')}" style="margin-left: 8px; cursor: pointer;">
+                        <strong>${col.name}</strong>
+                        <span class="type-badge">${col.type}</span>
+                        ${col.sample_values && col.sample_values.length > 0 ? 
+                            `<span class="sample-values">Sample: ${col.sample_values.slice(0, 3).join(', ')}</span>` : 
+                            ''}
+                    </label>
+                </div>
+            `).join('');
+            
+            document.getElementById('columnSelectionPanel').style.display = 'block';
+            updateSchemaPreview();
+        }
+        
+        function selectAllColumns() {
+            document.querySelectorAll('#columnCheckboxes input[type="checkbox"]').forEach(cb => {
+                cb.checked = true;
+            });
+            updateSchemaPreview();
+        }
+        
+        function deselectAllColumns() {
+            document.querySelectorAll('#columnCheckboxes input[type="checkbox"]').forEach(cb => {
+                cb.checked = false;
+            });
+            updateSchemaPreview();
+        }
+        
+        function updateSchemaPreview() {
+            const selectedColumns = Array.from(
+                document.querySelectorAll('#columnCheckboxes input:checked')
+            ).map(cb => cb.value);
+            
+            const selectedColObjs = detectedColumns.filter(col => selectedColumns.includes(col.name));
+            
+            const previewContent = document.getElementById('schemaPreviewContent');
+            if (selectedColumns.length === 0) {
+                previewContent.innerHTML = '<p style="color: #dc2626; margin: 0;">⚠️ No columns selected. Please select at least one column.</p>';
+                document.getElementById('confirmParseBtn').disabled = true;
+                document.getElementById('confirmParseBtn').style.opacity = '0.5';
+            } else {
+                previewContent.innerHTML = `
+                    <p style="margin: 0 0 10px 0;"><strong>Selected Columns:</strong> ${selectedColumns.length}</p>
+                    <div style="max-height: 150px; overflow-y: auto;">
+                        <table style="width: 100%; border-collapse: collapse; font-size: 0.9em;">
+                            <thead>
+                                <tr>
+                                    <th style="padding: 6px; text-align: left; border-bottom: 1px solid #cbd5e0;">Column</th>
+                                    <th style="padding: 6px; text-align: left; border-bottom: 1px solid #cbd5e0;">Type</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${selectedColObjs.map(col => `
+                                    <tr>
+                                        <td style="padding: 6px; border-bottom: 1px solid #e2e8f0;">${col.name}</td>
+                                        <td style="padding: 6px; border-bottom: 1px solid #e2e8f0;"><span class="type-badge">${col.type}</span></td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+                document.getElementById('confirmParseBtn').disabled = false;
+                document.getElementById('confirmParseBtn').style.opacity = '1';
+            }
+        }
+        
+        async function confirmParseWithSelection() {
+            const headerRow = parseInt(document.getElementById('headerRowSelect').value);
+            const selectedColumns = Array.from(
+                document.querySelectorAll('#columnCheckboxes input:checked')
+            ).map(cb => cb.value);
+            
+            if (selectedColumns.length === 0) {
+                showAlert('Please select at least one column', 'error');
+                return;
+            }
+            
             const tableName = document.getElementById('parseTableName').value.trim();
             
             if (!tableName) {
@@ -1760,9 +2003,9 @@
             }
             
             // Show loading state
-            const parseBtn = event.target;
+            const parseBtn = document.getElementById('confirmParseBtn');
             const originalText = parseBtn.textContent;
-            parseBtn.textContent = 'Parsing...';
+            parseBtn.textContent = 'Creating Table...';
             parseBtn.disabled = true;
             
             try {
@@ -1773,7 +2016,9 @@
                         connection_id: currentExcelPreview.connectionId,
                         file_path: currentExcelPreview.file_path,
                         table_name: tableName,
-                        sheet_name: currentExcelPreview.selected_sheet
+                        sheet_name: currentExcelPreview.selected_sheet,
+                        header_row: headerRow,
+                        selected_columns: selectedColumns
                     })
                 });
                 
@@ -1785,13 +2030,12 @@
                 const result = await response.json();
                 
                 showAlert(
-                    `Success! Created table: ${result.table_name}\nRows inserted: ${result.rows_inserted} of ${result.total_rows}`,
+                    `Success! Created table: ${result.table_name} with ${selectedColumns.length} columns\nRows inserted: ${result.rows_inserted} of ${result.total_rows}`,
                     'success'
                 );
                 
                 closeExcelPreview();
                 
-                // Optionally refresh documents table or show success state
                 console.log('Parse result:', result);
                 
             } catch (error) {
@@ -1800,6 +2044,12 @@
                 parseBtn.textContent = originalText;
                 parseBtn.disabled = false;
             }
+        }
+        
+        // Keep old function for backward compatibility (if needed)
+        async function confirmParse() {
+            // Redirect to new function
+            await confirmParseWithSelection();
         }
 
         function closeExcelPreview() {
