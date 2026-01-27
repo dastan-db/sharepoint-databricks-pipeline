@@ -139,66 +139,18 @@ class _SchemaManagerService:
         Returns:
             Dict with table names and creation status
         """
-        catalog = os.getenv("UC_CATALOG", "main")
-        schema = os.getenv("SHAREPOINT_SCHEMA_PREFIX", "sharepoint")
-
-        # Ensure catalog and schema exist
-        await self._ensure_catalog_and_schema_exist(catalog, schema)
-
-        # Define sharepoint_connections table schema
-        connections_columns = [
-            ColumnInfo(name="id", position=0, type_name=ColumnTypeName.STRING, type_text="STRING", type_json='{"name":"id","type":"string","nullable":true,"metadata":{}}', comment="Connection ID"),
-            ColumnInfo(name="name", position=1, type_name=ColumnTypeName.STRING, type_text="STRING", type_json='{"name":"name","type":"string","nullable":true,"metadata":{}}', comment="Connection display name"),
-            ColumnInfo(name="client_id", position=2, type_name=ColumnTypeName.STRING, type_text="STRING", type_json='{"name":"client_id","type":"string","nullable":true,"metadata":{}}', comment="OAuth client ID"),
-            ColumnInfo(name="client_secret", position=3, type_name=ColumnTypeName.STRING, type_text="STRING", type_json='{"name":"client_secret","type":"string","nullable":true,"metadata":{}}', comment="OAuth client secret"),
-            ColumnInfo(name="tenant_id", position=4, type_name=ColumnTypeName.STRING, type_text="STRING", type_json='{"name":"tenant_id","type":"string","nullable":true,"metadata":{}}', comment="Azure tenant ID"),
-            ColumnInfo(name="refresh_token", position=5, type_name=ColumnTypeName.STRING, type_text="STRING", type_json='{"name":"refresh_token","type":"string","nullable":true,"metadata":{}}', comment="OAuth refresh token"),
-            ColumnInfo(name="site_id", position=6, type_name=ColumnTypeName.STRING, type_text="STRING", type_json='{"name":"site_id","type":"string","nullable":true,"metadata":{}}', comment="SharePoint site ID"),
-            ColumnInfo(name="connection_name", position=7, type_name=ColumnTypeName.STRING, type_text="STRING", type_json='{"name":"connection_name","type":"string","nullable":true,"metadata":{}}', comment="Databricks connection name"),
-        ]
-
-        # Define sharepoint_pipelines table schema
-        pipelines_columns = [
-            ColumnInfo(name="id", position=0, type_name=ColumnTypeName.STRING, type_text="STRING", type_json='{"name":"id","type":"string","nullable":true,"metadata":{}}', comment="Pipeline ID"),
-            ColumnInfo(name="name", position=1, type_name=ColumnTypeName.STRING, type_text="STRING", type_json='{"name":"name","type":"string","nullable":true,"metadata":{}}', comment="Pipeline display name"),
-            ColumnInfo(name="connection_id", position=2, type_name=ColumnTypeName.STRING, type_text="STRING", type_json='{"name":"connection_id","type":"string","nullable":true,"metadata":{}}', comment="Reference to connection ID"),
-            ColumnInfo(name="ingestion_type", position=3, type_name=ColumnTypeName.STRING, type_text="STRING", type_json='{"name":"ingestion_type","type":"string","nullable":true,"metadata":{}}', comment="Type of ingestion"),
-            ColumnInfo(name="drive_names", position=4, type_name=ColumnTypeName.STRING, type_text="STRING", type_json='{"name":"drive_names","type":"string","nullable":true,"metadata":{}}', comment="JSON array of drive names"),
-            ColumnInfo(name="delta_table", position=5, type_name=ColumnTypeName.STRING, type_text="STRING", type_json='{"name":"delta_table","type":"string","nullable":true,"metadata":{}}', comment="Destination Delta table"),
-            ColumnInfo(name="file_pattern", position=6, type_name=ColumnTypeName.STRING, type_text="STRING", type_json='{"name":"file_pattern","type":"string","nullable":true,"metadata":{}}', comment="File pattern to match"),
-            ColumnInfo(name="pipeline_id", position=7, type_name=ColumnTypeName.STRING, type_text="STRING", type_json='{"name":"pipeline_id","type":"string","nullable":true,"metadata":{}}', comment="Databricks pipeline ID"),
-        ]
-
-        # Create tables
-        await self._ensure_table_exists(
-            catalog, schema, "sharepoint_connections", connections_columns, "SharePoint connection configurations"
-        )
-        await self._ensure_table_exists(
-            catalog, schema, "sharepoint_pipelines", pipelines_columns, "SharePoint pipeline configurations"
-        )
-
-        return {
-            "sharepoint_connections": True,
-            "sharepoint_pipelines": True,
-        }
+        # Legacy tables removed - now using native Unity Catalog connections via Lakeflow
+        return {}
 
     async def initialize_lakebase_tables(self) -> Dict[str, bool]:
         """
-        Initialize Lakebase-related tables (Excel streaming configs).
-        Note: These are in Lakebase PostgreSQL, not Unity Catalog.
-        
-        For now, we'll keep the CREATE TABLE IF NOT EXISTS approach for Lakebase
-        since it's a different system. This method is a placeholder for future migration.
+        Initialize Lakebase-related tables.
         
         Returns:
             Dict with table names and status
         """
-        # Lakebase uses PostgreSQL, not Unity Catalog
-        # The CREATE TABLE IF NOT EXISTS approach remains valid for this use case
-        # This is documented here for completeness
-        return {
-            "excel_stream_configs": True,  # Created via Lakebase.query() in routes
-        }
+        # Legacy Excel streaming tables removed
+        return {}
 
 
 # Create singleton instance

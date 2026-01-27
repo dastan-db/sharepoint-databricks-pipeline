@@ -4,8 +4,6 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from app.api.routes_runs import router as runs_router
 from app.api.routes_config import router as config_router
-from app.api.routes_sharepoint import router as sharepoint_router
-from app.api.routes_excel_streaming import router as excel_streaming_router
 from app.api.routes_lakeflow import router as lakeflow_router
 from app.api.routes_excel import router as excel_router
 from app.api.routes_catalog import router as catalog_router
@@ -50,8 +48,6 @@ async def startup_event():
 
 app.include_router(runs_router, prefix="/runs", tags=["runs"])
 app.include_router(config_router, prefix="/configs", tags=["configs"])
-app.include_router(sharepoint_router, prefix="/sharepoint", tags=["sharepoint"])
-app.include_router(excel_streaming_router, prefix="/excel-streaming", tags=["excel-streaming"])
 app.include_router(lakeflow_router, prefix="/api/lakeflow", tags=["lakeflow"])
 app.include_router(excel_router, prefix="/api/excel", tags=["excel"])
 app.include_router(catalog_router, prefix="/api/catalog", tags=["catalog"])
