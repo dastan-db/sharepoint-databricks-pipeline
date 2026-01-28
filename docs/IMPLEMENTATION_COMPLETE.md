@@ -235,37 +235,27 @@ http://localhost:8001
 ## 🔧 Technical Architecture
 
 ### Connection Flow
-```
-Unity Catalog (18 connections)
-    ↓
-SHOW CONNECTIONS query
-    ↓
-Filter type='SHAREPOINT'
-    ↓
-SharePointConnection model
-    ↓
-UI Table with radio buttons
-    ↓
-User selects "sharepoint-fe"
-    ↓
-Job form pre-fills connection name
-    ↓
-Lakeflow pipeline uses connection
+
+```mermaid
+flowchart TD
+    A[Unity Catalog<br/>18 connections] --> B[SHOW CONNECTIONS query]
+    B --> C[Filter type='SHAREPOINT']
+    C --> D[SharePointConnection model]
+    D --> E[UI Table with radio buttons]
+    E --> F[User selects 'sharepoint-fe']
+    F --> G[Job form pre-fills connection name]
+    G --> H[Lakeflow pipeline uses connection]
 ```
 
 ### Create Connection Flow
-```
-User fills form
-    ↓
-POST /sharepoint/connections
-    ↓
-CREATE CONNECTION SQL
-    ↓
-UnityCatalog.query()
-    ↓
-Unity Catalog creates connection
-    ↓
-Available for all users/pipelines
+
+```mermaid
+flowchart TD
+    A[User fills form] --> B[POST /sharepoint/connections]
+    B --> C[CREATE CONNECTION SQL]
+    C --> D[UnityCatalog.query]
+    D --> E[Unity Catalog creates connection]
+    E --> F[Available for all users/pipelines]
 ```
 
 ---
@@ -353,23 +343,17 @@ Available for all users/pipelines
 
 ## ✅ Final Status
 
-```
-┌──────────────────────────────────────────────────────────┐
-│                                                          │
-│     🎉 IMPLEMENTATION COMPLETE!                         │
-│                                                          │
-│  ✅ Unity Catalog Integration                           │
-│  ✅ 18 SharePoint Connections Available                 │
-│  ✅ "sharepoint-fe" Ready for Testing                   │
-│  ✅ UI Enhanced with Clear Instructions                 │
-│  ✅ Connection Creation Form Available                  │
-│  ✅ Documentation Complete                              │
-│  ✅ Verification Scripts Ready                          │
-│                                                          │
-│  🚀 READY FOR PRODUCTION USE                            │
-│                                                          │
-└──────────────────────────────────────────────────────────┘
-```
+> **🎉 IMPLEMENTATION COMPLETE!**
+> 
+> - ✅ Unity Catalog Integration
+> - ✅ 18 SharePoint Connections Available
+> - ✅ "sharepoint-fe" Ready for Testing
+> - ✅ UI Enhanced with Clear Instructions
+> - ✅ Connection Creation Form Available
+> - ✅ Documentation Complete
+> - ✅ Verification Scripts Ready
+> 
+> **🚀 READY FOR PRODUCTION USE**
 
 ---
 

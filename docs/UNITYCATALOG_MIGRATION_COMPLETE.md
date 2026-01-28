@@ -140,33 +140,25 @@ result = UnityCatalog.query(
 ## Architecture Comparison
 
 ### Before (databricks-sdk)
-```
-UnityCatalog.query()
-  ↓
-WarehouseManager.get_warehouse_id()
-  ↓
-WorkspaceClient (cached, thread-locked)
-  ↓
-statement_execution.execute_statement()
-  ↓
-Manual result parsing (14 lines)
-  ↓
-Error handling (3 states)
-  ↓
-Return List[Dict]
+
+```mermaid
+flowchart TD
+    A[UnityCatalog.query] --> B[WarehouseManager.get_warehouse_id]
+    B --> C[WorkspaceClient<br/>cached, thread-locked]
+    C --> D[statement_execution.execute_statement]
+    D --> E[Manual result parsing<br/>14 lines]
+    E --> F[Error handling<br/>3 states]
+    F --> G[Return List Dict]
 ```
 
 ### After (MCP)
-```
-UnityCatalog.query()
-  ↓
-WarehouseManager.get_warehouse_id()
-  ↓
-call_mcp_tool("execute_sql")
-  ↓
-MCP Client (automatic parsing)
-  ↓
-Return List[Dict]
+
+```mermaid
+flowchart TD
+    A[UnityCatalog.query] --> B[WarehouseManager.get_warehouse_id]
+    B --> C[call_mcp_tool execute_sql]
+    C --> D[MCP Client<br/>automatic parsing]
+    D --> E[Return List Dict]
 ```
 
 **Reduction:** 7 steps → 4 steps (43% simpler)

@@ -194,30 +194,11 @@ app/
 
 ### MCP Integration Flow
 
-```
-┌─────────────────────────────────────────┐
-│      FastAPI Routes                     │
-│      • /api/catalog/* (new)             │
-│      • Existing routes (enhanced)       │
-└─────────────────┬───────────────────────┘
-                  ↓
-┌─────────────────────────────────────────┐
-│      Services Layer                     │
-│      • WarehouseManager (new)           │
-│      • UnityCatalog (enhanced)          │
-└─────────────────┬───────────────────────┘
-                  ↓
-┌─────────────────────────────────────────┐
-│      MCP Client (core/mcp_client.py)    │
-│      • call_mcp_tool() helper           │
-└─────────────────┬───────────────────────┘
-                  ↓
-┌─────────────────────────────────────────┐
-│      Databricks MCP Tools               │
-│      • get_best_warehouse               │
-│      • get_table_details                │
-│      • execute_sql (future)             │
-└─────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    A["FastAPI Routes<br/>• /api/catalog/* (new)<br/>• Existing routes (enhanced)"] --> B["Services Layer<br/>• WarehouseManager (new)<br/>• UnityCatalog (enhanced)"]
+    B --> C["MCP Client (core/mcp_client.py)<br/>• call_mcp_tool() helper"]
+    C --> D["Databricks MCP Tools<br/>• get_best_warehouse<br/>• get_table_details<br/>• execute_sql"]
 ```
 
 ---

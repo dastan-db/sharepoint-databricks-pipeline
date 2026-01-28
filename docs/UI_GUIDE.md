@@ -191,30 +191,19 @@
 
 ## User Journey Timeline
 
-```
-1. Load Page
-   ↓
-2. See 18 SharePoint Connections
-   ↓
-3. Click radio button next to "sharepoint-fe"
-   ↓
-4. ✅ Success message + Auto-scroll
-   ↓
-5. Green form appears with connection selected
-   ↓
-6. Fill in Site ID + Destination Schema
-   ↓
-7. Click "Create Job"
-   ↓
-8. 🟡 Yellow deployment box appears
-   ↓
-9. Watch progress (updates every 5s)
-   ↓
-10. ✅ Green documents viewer appears
-    ↓
-11. Select Excel file for CDC
-    ↓
-12. Configure and start streaming! 🎉
+```mermaid
+flowchart TD
+    A[1. Load Page] --> B[2. See 18 SharePoint Connections]
+    B --> C[3. Click radio button next to 'sharepoint-fe']
+    C --> D[4. ✅ Success message + Auto-scroll]
+    D --> E[5. Green form appears with connection selected]
+    E --> F[6. Fill in Site ID + Destination Schema]
+    F --> G[7. Click 'Create Job']
+    G --> H[8. 🟡 Yellow deployment box appears]
+    H --> I[9. Watch progress updates every 5s]
+    I --> J[10. ✅ Green documents viewer appears]
+    J --> K[11. Select Excel file for CDC]
+    K --> L[12. Configure and start streaming! 🎉]
 ```
 
 ---

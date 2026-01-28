@@ -183,18 +183,14 @@ COMMENT 'Site ID or description'
 ```
 
 **Execution Flow:**
-```
-UI Form
-  ↓
-POST /sharepoint/connections
-  ↓
-Build CREATE CONNECTION SQL
-  ↓
-UnityCatalog.query(sql)
-  ↓
-MCP execute_sql
-  ↓
-Unity Catalog
+
+```mermaid
+flowchart TD
+    A[UI Form] --> B[POST /sharepoint/connections]
+    B --> C[Build CREATE CONNECTION SQL]
+    C --> D[UnityCatalog.query]
+    D --> E[MCP execute_sql]
+    E --> F[Unity Catalog]
 ```
 
 ### Connection Listing
@@ -263,43 +259,16 @@ $ curl -s http://localhost:8001/sharepoint/connections | \
 
 ## User Experience Flow
 
-```
-1. User opens http://localhost:8001
-   ↓
-2. SharePoint Connections section loads
-   • Shows 18 connections from Unity Catalog
-   • Displays info box about UC integration
-   • Search bar ready for filtering
-   ↓
-3. User finds "sharepoint-fe" in table
-   • Can use search to filter: "sharepoint-fe"
-   • Sees connection in row 13
-   ↓
-4. User clicks radio button next to "sharepoint-fe"
-   • Row highlights in blue
-   • Success alert appears at top
-   • Page auto-scrolls to Lakeflow Jobs section
-   ↓
-5. Green job form appears
-   • Connection name pre-filled: "sharepoint-fe"
-   • Document table shown: "main.sharepoint_fe.documents"
-   • Ready for Site ID input
-   ↓
-6. User fills in:
-   • SharePoint Site ID (required)
-   • Destination Schema (e.g., "fe_test")
-   ↓
-7. User clicks "Create Job"
-   • Yellow deployment box appears
-   • Shows pipeline creation progress
-   • Updates every 5 seconds
-   ↓
-8. Deployment completes
-   • Green documents viewer appears
-   • Shows ingested files from SharePoint
-   • Ready for Excel parsing or CDC setup
-   ↓
-9. Success! 🎉
+```mermaid
+flowchart TD
+    A[1. User opens http://localhost:8001] --> B[2. SharePoint Connections section loads<br/>• 18 connections from Unity Catalog<br/>• Info box about UC integration<br/>• Search bar ready]
+    B --> C[3. User finds 'sharepoint-fe'<br/>• Search to filter<br/>• Row 13 in table]
+    C --> D[4. Click radio button<br/>• Row highlights blue<br/>• Success alert<br/>• Auto-scroll to Lakeflow Jobs]
+    D --> E[5. Green job form appears<br/>• Connection pre-filled<br/>• Document table shown<br/>• Ready for input]
+    E --> F[6. User fills in<br/>• SharePoint Site ID<br/>• Destination Schema]
+    F --> G[7. Click 'Create Job'<br/>• Yellow deployment box<br/>• Progress updates<br/>• Every 5 seconds]
+    G --> H[8. Deployment completes<br/>• Green documents viewer<br/>• Shows ingested files<br/>• Ready for Excel/CDC]
+    H --> I[9. Success! 🎉]
 ```
 
 ---

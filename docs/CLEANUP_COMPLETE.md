@@ -109,22 +109,20 @@ print("Note: Unity Catalog tables are managed via Lakeflow pipelines.")
 ## Architecture Comparison
 
 ### Before Cleanup
-```
-📁 18 application files
-🔀 2 database services (Lakebase + UnityCatalog)
-🔀 2 pipelines (old Lakebase + new Lakeflow)
-📊 48% test coverage
-🗑️ 52% dead code
-```
+
+> - 📁 18 application files
+> - 🔀 2 database services (Lakebase + UnityCatalog)
+> - 🔀 2 pipelines (old Lakebase + new Lakeflow)
+> - 📊 48% test coverage
+> - 🗑️ 52% dead code
 
 ### After Cleanup
-```
-📁 11 application files (-39%)
-✅ 1 database service (UnityCatalog only)
-✅ 1 pipeline (Lakeflow only)
-📊 ~75% test coverage (estimated)
-✨ All code actively used
-```
+
+> - 📁 11 application files (-39%)
+> - ✅ 1 database service (UnityCatalog only)
+> - ✅ 1 pipeline (Lakeflow only)
+> - 📊 ~75% test coverage (estimated)
+> - ✨ All code actively used
 
 ---
 
