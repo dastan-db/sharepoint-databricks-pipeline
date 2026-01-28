@@ -193,3 +193,25 @@ def test_run_sync_job_success(test_client: TestClient):
     assert response.status_code == 200
     result = response.json()
     assert "run_id" in result
+
+
+def test_add_triggers_no_jobs(test_client: TestClient):
+    """Test POST /api/lakeflow/jobs/add-triggers with no existing jobs."""
+    response = test_client.post("/api/lakeflow/jobs/add-triggers")
+    assert response.status_code == 200
+    result = response.json()
+    assert "updated_jobs" in result
+    assert isinstance(result["updated_jobs"], list)
+
+
+@pytest.mark.skip(reason="Requires existing Databricks jobs to update")
+def test_add_triggers_success(test_client: TestClient):
+    """
+    Test POST /api/lakeflow/jobs/add-triggers updates existing jobs.
+    SKIPPED: Requires existing Databricks jobs.
+    """
+    response = test_client.post("/api/lakeflow/jobs/add-triggers")
+    assert response.status_code == 200
+    result = response.json()
+    assert "updated_jobs" in result
+    assert "failed_jobs" in result

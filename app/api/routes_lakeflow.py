@@ -6,7 +6,7 @@ from app.services.unity_catalog import UnityCatalog
 from app.services.excel_sync_notebook import ExcelSyncNotebook
 from databricks.sdk import WorkspaceClient
 from databricks.sdk.service.pipelines import IngestionConfig, IngestionPipelineDefinition, IngestionSourceType, SchemaSpec
-from databricks.sdk.service.jobs import Task, PipelineTask, NotebookTask, TaskDependency, Source, TableUpdateTriggerConfiguration, TriggerSettings
+from databricks.sdk.service.jobs import Task, PipelineTask, NotebookTask, TaskDependency, Source, TableUpdateTriggerConfiguration, TriggerSettings, Condition, PauseStatus
 from databricks.sdk.service.workspace import ImportFormat, Language
 import os
 from datetime import datetime
@@ -182,8 +182,8 @@ dbutils.notebook.exit("SYNC_NOT_CONFIGURED")
         except Exception as placeholder_err:
             print(f"Warning: Could not create placeholder notebook: {placeholder_err}")
         
-        # Create job WITHOUT table update trigger initially (table doesn't exist yet)
-        # The trigger will be added automatically after first successful run creates the table
+        # Create job with table update trigger
+        # Job automatically runs when documents table is updated (60s debounce)
         job = w.jobs.create(
             name=f"{config.connection_name}_sync_job_{unique_id}",
             tasks=[
@@ -206,8 +206,15 @@ dbutils.notebook.exit("SYNC_NOT_CONFIGURED")
                     disable_auto_optimization=True
                 )
             ],
+            trigger=TriggerSettings(
+                pause_status=PauseStatus.UNPAUSED,
+                table_update=TableUpdateTriggerConfiguration(
+                    table_names=[config.document_table],
+                    condition=Condition.ANY_UPDATED,
+                    wait_after_last_change_seconds=60
+                )
+            ),
             max_concurrent_runs=1
-            # NOTE: No trigger initially - table doesn't exist yet
         )
         config.job_id = str(job.job_id)
         
@@ -633,3 +640,78 @@ async def disable_sync(connection_id: str):
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to disable sync: {str(e)}")
+
+
+@router.post("/jobs/add-triggers")
+async def add_triggers_to_existing_jobs():
+    """Add table update triggers to all existing jobs that don't have them"""
+    try:
+        jobs_table = _get_lakeflow_jobs_table()
+        
+        # Query all jobs
+        query = f"""
+            SELECT connection_id, job_id, document_table
+            FROM {jobs_table}
+            WHERE job_id IS NOT NULL
+        """
+        rows = UnityCatalog.query(query)
+        
+        if not rows:
+            return {
+                "message": "No jobs found to update",
+                "updated_jobs": []
+            }
+        
+        # Initialize WorkspaceClient
+        w = WorkspaceClient(
+            host=os.getenv("DATABRICKS_HOST"),
+            token=os.getenv("DATABRICKS_TOKEN")
+        )
+        
+        updated_jobs = []
+        failed_jobs = []
+        
+        for row in rows:
+            connection_id = row['connection_id']
+            job_id = row['job_id']
+            document_table = row['document_table']
+            
+            try:
+                # Get current job settings
+                job = w.jobs.get(job_id=int(job_id))
+                
+                # Update job with trigger
+                w.jobs.update(
+                    job_id=int(job_id),
+                    new_settings={
+                        "trigger": TriggerSettings(
+                            pause_status=PauseStatus.UNPAUSED,
+                            table_update=TableUpdateTriggerConfiguration(
+                                table_names=[document_table],
+                                condition=Condition.ANY_UPDATED,
+                                wait_after_last_change_seconds=60
+                            )
+                        )
+                    }
+                )
+                
+                updated_jobs.append({
+                    "connection_id": connection_id,
+                    "job_id": job_id,
+                    "document_table": document_table,
+                    "status": "success"
+                })
+            except Exception as job_err:
+                failed_jobs.append({
+                    "connection_id": connection_id,
+                    "job_id": job_id,
+                    "error": str(job_err)
+                })
+        
+        return {
+            "message": f"Updated {len(updated_jobs)} job(s), {len(failed_jobs)} failed",
+            "updated_jobs": updated_jobs,
+            "failed_jobs": failed_jobs
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to add triggers: {str(e)}")

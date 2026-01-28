@@ -450,6 +450,7 @@ No manual connection setup needed if connections already exist in Unity Catalog!
 
 -   `GET /lakeflow/jobs` - List all Lakeflow sync jobs
 -   `POST /lakeflow/jobs` - Create a new sync job with automatic table update trigger
+-   `POST /lakeflow/jobs/add-triggers` - Add table update triggers to existing jobs (one-time migration)
 -   `GET /lakeflow/jobs/{connection_id}/status` - Get job status
 -   `GET /lakeflow/jobs/{connection_id}/documents` - Query documents table
 -   `POST /lakeflow/jobs/{connection_id}/configure-sync` - Configure Excel-to-Delta sync with CDC
@@ -457,7 +458,7 @@ No manual connection setup needed if connections already exist in Unity Catalog!
 -   `DELETE /lakeflow/jobs/{connection_id}/disable-sync` - Disable auto-sync
 -   `DELETE /lakeflow/jobs/{connection_id}` - Delete sync job
 
-**Key Feature**: Jobs automatically trigger when the documents table is updated (60s debounce), implementing event-driven CDC pattern.
+**Key Feature**: Jobs automatically trigger when the documents table is updated (60s debounce), implementing event-driven CDC pattern. All newly created jobs have this trigger enabled by default. For existing jobs created before this feature, use the `/lakeflow/jobs/add-triggers` endpoint to enable automatic triggers.
 
 ### Excel Streaming Configurations
 
@@ -603,7 +604,7 @@ The stream will continuously monitor Lakebase and process new Excel files into D
 - **Sync Status**: View Excel sync task runs and CDC watermarks
 - **Stream Status**: View active streams, check if streaming is running
 - **Data Validation**: Verify data is flowing through all stages
-- **Automatic Triggers**: Monitor table update triggers to ensure jobs run when expected
+- **Automatic Triggers**: Monitor table update triggers in Databricks UI (Jobs > [Your Job] > Trigger) to ensure jobs run when expected. Triggers have a 60-second debounce to batch multiple table changes into a single job run.
 
 ## SharePoint OAuth U2M Setup
 
