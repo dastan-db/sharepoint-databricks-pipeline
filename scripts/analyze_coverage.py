@@ -11,7 +11,7 @@ from typing import Dict, List, Set
 
 def load_coverage_data() -> Dict:
     """Load coverage JSON data."""
-    coverage_path = Path("coverage_reports/coverage.json")
+    coverage_path = Path("docs/coverage_reports/coverage.json")
     
     if not coverage_path.exists():
         print("Error: Coverage report not found. Run tests first.")
@@ -215,7 +215,7 @@ def main():
     generate_report(analysis, unused_imports)
     
     # Save detailed report to file
-    report_path = Path("coverage_reports/dead_code_analysis.txt")
+    report_path = Path("docs/coverage_reports/dead_code_analysis.txt")
     report_path.parent.mkdir(parents=True, exist_ok=True)
     
     with open(report_path, 'w') as f:

@@ -16,7 +16,7 @@ if ! command -v pytest &> /dev/null; then
 fi
 
 # Create coverage directory
-mkdir -p coverage_reports
+mkdir -p docs/coverage_reports
 
 echo "Running tests with coverage..."
 echo ""
@@ -24,9 +24,9 @@ echo ""
 # Run tests with coverage
 pytest tests/ \
     --cov=app \
-    --cov-report=html:coverage_reports/html \
+    --cov-report=html:docs/coverage_reports/html \
     --cov-report=term \
-    --cov-report=json:coverage_reports/coverage.json \
+    --cov-report=json:docs/coverage_reports/coverage.json \
     -v \
     --tb=short
 
@@ -34,8 +34,8 @@ echo ""
 echo "============================================"
 echo "Coverage Report Generated"
 echo "============================================"
-echo "HTML Report: coverage_reports/html/index.html"
-echo "JSON Report: coverage_reports/coverage.json"
+echo "HTML Report: docs/coverage_reports/html/index.html"
+echo "JSON Report: docs/coverage_reports/coverage.json"
 echo ""
 
 # Generate dead code analysis
@@ -44,7 +44,7 @@ echo "Analyzing Dead Code"
 echo "============================================"
 echo ""
 
-python3 analyze_coverage.py
+python3 scripts/analyze_coverage.py
 
 echo ""
 echo "============================================"
