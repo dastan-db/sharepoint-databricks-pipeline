@@ -132,26 +132,6 @@ class _SchemaManagerService:
 
         await asyncio.to_thread(check_and_create_table)
 
-    async def initialize_sharepoint_tables(self) -> Dict[str, bool]:
-        """
-        Initialize SharePoint-related tables in Unity Catalog.
-        
-        Returns:
-            Dict with table names and creation status
-        """
-        # Legacy tables removed - now using native Unity Catalog connections via Lakeflow
-        return {}
-
-    async def initialize_lakebase_tables(self) -> Dict[str, bool]:
-        """
-        Initialize Lakebase-related tables.
-        
-        Returns:
-            Dict with table names and status
-        """
-        # Legacy Excel streaming tables removed
-        return {}
-
 
 # Create singleton instance
 SchemaManager = _SchemaManagerService()

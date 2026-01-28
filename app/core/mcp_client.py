@@ -225,19 +225,21 @@ def _execute_sql(
         if timeout < 5 or timeout > 50:
             timeout = min(max(timeout, 5), 50)  # Clamp to 5-50
         
-        # Prepend USE statements if catalog/schema provided
-        full_query = sql_query
+        # Set catalog/schema context using parameters instead of USE statements
+        # Databricks SQL Warehouse doesn't support multiple statements in one execution
+        parameters = {
+            "warehouse_id": warehouse_id,
+            "statement": sql_query,
+            "wait_timeout": f"{timeout}s"
+        }
+        
         if catalog:
-            full_query = f"USE CATALOG {catalog};\n{full_query}"
+            parameters["catalog"] = catalog
         if schema:
-            full_query = f"USE SCHEMA {schema};\n{full_query}"
+            parameters["schema"] = schema
         
         # Execute statement
-        statement = w.statement_execution.execute_statement(
-            warehouse_id=warehouse_id,
-            statement=full_query,
-            wait_timeout=f"{timeout}s"
-        )
+        statement = w.statement_execution.execute_statement(**parameters)
         
         # Wait for completion and get results
         if statement.status.state == StatementState.SUCCEEDED:

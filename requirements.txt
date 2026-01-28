@@ -2,9 +2,13 @@ fastapi
 uvicorn
 python-dotenv
 databricks-sdk==0.65.0
-psycopg2-binary
 pydantic
 pandas
 openpyxl
+# Testing dependencies
+pytest
+pytest-asyncio
+pytest-cov
+httpx
 # Databricks tools for secure SQL execution and job orchestration
 -e ../ai-dev-kit/databricks-tools-core

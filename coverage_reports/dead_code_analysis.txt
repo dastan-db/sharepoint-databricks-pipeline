@@ -1,0 +1,16 @@
+DEAD CODE ANALYSIS
+================================================================================
+
+Overall Coverage: 48.00%
+
+UNTESTED FILES:
+
+LOW COVERAGE FILES (<50%):
+  - app/api/routes_config.py: 21.7%
+  - app/api/routes_excel.py: 32.7%
+  - app/api/routes_lakeflow.py: 41.1%
+  - app/api/routes_runs.py: 35.5%
+  - app/core/pipeline.py: 31.2%
+  - app/services/data_quality.py: 7.4%
+  - app/services/excel_parser.py: 14.3%
+  - app/services/update_checker.py: 14.8%
